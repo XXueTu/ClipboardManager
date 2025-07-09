@@ -4,6 +4,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
+import { useCategoriesAndTags } from '../hooks';
 
 /**
  * 标签筛选预览组件 - 为将来的标签功能设计
@@ -18,6 +19,8 @@ const TagFilterPreview = ({
     maxVisibleTags = 10,
     searchPlaceholder = "搜索标签..." 
 }) => {
+    // 获取动态标签
+    const { tags: backendTags, loading: tagsLoading } = useCategoriesAndTags();
     const [tagSearch, setTagSearch] = useState('');
     const [showAllTags, setShowAllTags] = useState(false);
 
@@ -155,7 +158,7 @@ const TagFilterPreview = ({
                         常用标签
                     </div>
                     <div className="flex flex-wrap gap-1">
-                        {['工作', '个人', '重要', '待办', '代码'].map(tag => (
+                        {(backendTags.length > 0 ? backendTags.slice(0, 5) : ['工作', '个人', '重要', '待办', '代码']).map(tag => (
                             <Badge 
                                 key={tag} 
                                 variant="secondary" 

@@ -1,24 +1,33 @@
 import {
-    Copy, Trash2, Edit3, RotateCcw,
-    Star, Heart
+    Bot // Added Bot icon
+    ,
+
+
+
+    Copy,
+    Edit3,
+    Heart,
+    RotateCcw,
+    Sparkles,
+    Trash2
 } from 'lucide-react';
 import { useState } from 'react';
 
 // shadcn/ui 组件
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from './ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { Badge } from './ui/badge';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Textarea } from './ui/textarea';
 import { useToast } from './ui/toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
-import { formatDate, getContentTypeColor, getContentTypeIcon, getFileName, shouldShowTitle } from '../utils';
-import { CATEGORY_OPTIONS, CONTENT_MAX_LENGTH } from '../constants';
+import { categoriesToOptions, FALLBACK_CATEGORY_OPTIONS, CONTENT_MAX_LENGTH } from '../constants';
+import { formatDate, getContentTypeIcon, getFileName, shouldShowTitle } from '../utils';
+import { useCategoriesAndTags } from '../hooks';
 
 /**
  * 剪切板条目卡片组件
@@ -29,6 +38,7 @@ import { CATEGORY_OPTIONS, CONTENT_MAX_LENGTH } from '../constants';
  * @param {Function} props.onDelete - 删除回调函数
  * @param {Function} props.onRestore - 恢复回调函数
  * @param {Function} props.onEdit - 编辑回调函数
+ * @param {Function} props.onGenerateAITags - 生成AI标签回调函数
  * @param {boolean} props.isTrash - 是否为回收站页面
  * @param {boolean} props.isFavorites - 是否为收藏页面
  */
@@ -39,14 +49,25 @@ const ClipboardItemCard = ({
     onDelete, 
     onRestore, 
     onEdit, 
+    onGenerateAITags,
     isTrash = false, 
     isFavorites = false 
 }) => {
     const { toast } = useToast();
+    
+    // 获取动态分类和标签
+    const { categories: backendCategories, loading: categoriesLoading } = useCategoriesAndTags();
+    
+    // 使用后端分类，如果加载中或失败则使用后备分类
+    const categoryOptions = categoriesLoading || backendCategories.length === 0 
+        ? FALLBACK_CATEGORY_OPTIONS 
+        : categoriesToOptions(backendCategories);
+    
     const [modalVisible, setModalVisible] = useState(false);
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [editContent, setEditContent] = useState('');
     const [editCategory, setEditCategory] = useState('');
+    const [isGeneratingTags, setIsGeneratingTags] = useState(false);
     const maxLength = CONTENT_MAX_LENGTH;
     
     const handleCopy = async () => {
@@ -89,6 +110,25 @@ const ClipboardItemCard = ({
         setEditContent('');
         setEditCategory('');
         toast.success('内容已更新');
+    };
+
+    const handleGenerateAITags = async () => {
+        if (!onGenerateAITags) return;
+        
+        setIsGeneratingTags(true);
+        try {
+            const newTags = await onGenerateAITags(item?.id);
+            if (newTags && newTags.length > 0) {
+                toast.success(`成功生成了 ${newTags.length} 个AI标签`);
+            } else {
+                toast.info('未生成新的标签');
+            }
+        } catch (error) {
+            console.error('生成AI标签失败:', error);
+            toast.error('生成AI标签失败');
+        } finally {
+            setIsGeneratingTags(false);
+        }
     };
 
     const getTypeColor = (type) => {
@@ -141,6 +181,23 @@ const ClipboardItemCard = ({
                                     </div>
                                 </div>
                             </div>
+
+                            {/* 标签显示区域 */}
+                            {item?.tags && item.tags.length > 0 && (
+                                <div className="mb-3">
+                                    <div className="flex flex-wrap gap-1">
+                                        {item.tags.map((tag, index) => (
+                                            <Badge 
+                                                key={index} 
+                                                variant="outline" 
+                                                className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 border-blue-200"
+                                            >
+                                                {tag}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             
                             {/* 底部信息 */}
                             <div className="flex justify-between items-center">
@@ -197,6 +254,30 @@ const ClipboardItemCard = ({
                                                 </Button>
                                             </TooltipTrigger>
                                             <TooltipContent>编辑</TooltipContent>
+                                        </Tooltip>
+                                    )}
+                                    
+                                    {/* AI标签生成按钮 - 在所有非回收站页面都显示 */}
+                                    {!isTrash && onGenerateAITags && (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    onClick={handleGenerateAITags}
+                                                    disabled={isGeneratingTags}
+                                                >
+                                                    {isGeneratingTags ? (
+                                                        <Sparkles className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <Bot className="h-4 w-4 text-blue-500" />
+                                                    )}
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                {isGeneratingTags ? 'AI标签生成中...' : 'AI自动生成标签'}
+                                            </TooltipContent>
                                         </Tooltip>
                                     )}
                                     
@@ -320,7 +401,7 @@ const ClipboardItemCard = ({
                                     <SelectValue placeholder="选择分类" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {CATEGORY_OPTIONS.map(option => (
+                                    {categoryOptions.map(option => (
                                         <SelectItem key={option.value} value={option.value}>
                                             {option.label}
                                         </SelectItem>

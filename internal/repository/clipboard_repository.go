@@ -26,6 +26,8 @@ type ClipboardRepository interface {
 	GetStatistics() (models.Statistics, error)
 	IsDuplicateContent(content string) (bool, error)
 	UseItem(id string) error
+	GetAllCategories() ([]string, error)
+	GetAllTags() ([]string, error)
 }
 
 // clipboardRepository 剪切板数据仓库实现
@@ -200,9 +202,53 @@ func (r *clipboardRepository) Search(query models.SearchQuery) (models.SearchRes
 		args = append(args, query.Category)
 	}
 
-	if query.Type != "" {
-		sqlQuery += " AND content_type = ?"
-		args = append(args, query.Type)
+	// 标签查询
+	if len(query.Tags) > 0 {
+		tagMode := query.TagMode
+		if tagMode == "" {
+			tagMode = "any" // 默认为any模式
+		}
+
+		switch tagMode {
+		case "all": // 包含所有标签
+			for range query.Tags {
+				sqlQuery += ` AND id IN (
+					SELECT DISTINCT cit.item_id 
+					FROM clipboard_item_tags cit 
+					INNER JOIN tags t ON cit.tag_id = t.id 
+					WHERE t.name = ?
+				)`
+			}
+			for _, tag := range query.Tags {
+				args = append(args, tag)
+			}
+		case "none": // 不包含任何标签
+			for range query.Tags {
+				sqlQuery += ` AND id NOT IN (
+					SELECT DISTINCT cit.item_id 
+					FROM clipboard_item_tags cit 
+					INNER JOIN tags t ON cit.tag_id = t.id 
+					WHERE t.name = ?
+				)`
+			}
+			for _, tag := range query.Tags {
+				args = append(args, tag)
+			}
+		default: // "any" - 包含任一标签
+			placeholders := make([]string, len(query.Tags))
+			for i := range query.Tags {
+				placeholders[i] = "?"
+			}
+			sqlQuery += fmt.Sprintf(` AND id IN (
+				SELECT DISTINCT cit.item_id 
+				FROM clipboard_item_tags cit 
+				INNER JOIN tags t ON cit.tag_id = t.id 
+				WHERE t.name IN (%s)
+			)`, strings.Join(placeholders, ","))
+			for _, tag := range query.Tags {
+				args = append(args, tag)
+			}
+		}
 	}
 
 	// 获取总数
@@ -257,20 +303,9 @@ func (r *clipboardRepository) GetStatistics() (models.Statistics, error) {
 	monthAgo := time.Now().AddDate(0, -1, 0).Format("2006-01-02")
 	r.db.QueryRow("SELECT COUNT(*) FROM clipboard_items WHERE is_deleted = 0 AND DATE(created_at) >= ?", monthAgo).Scan(&stats.MonthItems)
 
-	// 类型统计
-	stats.TypeStats = make(map[string]int)
-	rows, _ := r.db.Query("SELECT content_type, COUNT(*) FROM clipboard_items WHERE is_deleted = 0 GROUP BY content_type")
-	for rows.Next() {
-		var contentType string
-		var count int
-		rows.Scan(&contentType, &count)
-		stats.TypeStats[contentType] = count
-	}
-	rows.Close()
-
 	// 分类统计
 	stats.CategoryStats = make(map[string]int)
-	rows, _ = r.db.Query("SELECT category, COUNT(*) FROM clipboard_items WHERE is_deleted = 0 GROUP BY category")
+	rows, _ := r.db.Query("SELECT category, COUNT(*) FROM clipboard_items WHERE is_deleted = 0 GROUP BY category")
 	for rows.Next() {
 		var category string
 		var count int
@@ -316,4 +351,84 @@ func (r *clipboardRepository) scanItems(rows *sql.Rows) ([]models.ClipboardItem,
 	}
 
 	return items, nil
+}
+
+// GetAllCategories 获取所有使用过的分类
+func (r *clipboardRepository) GetAllCategories() ([]string, error) {
+	// 从数据库获取所有使用过的分类
+	query := `SELECT DISTINCT category FROM clipboard_items WHERE is_deleted = 0 ORDER BY category`
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var categories []string
+	for rows.Next() {
+		var category string
+		if err := rows.Scan(&category); err != nil {
+			continue
+		}
+		categories = append(categories, category)
+	}
+
+	// 合并预定义的分类
+	allCategories := models.GetAllCategories()
+	categoryMap := make(map[string]bool)
+	
+	// 先添加预定义的分类
+	for _, cat := range allCategories {
+		categoryMap[cat] = true
+	}
+	
+	// 再添加数据库中使用过的分类
+	for _, cat := range categories {
+		categoryMap[cat] = true
+	}
+	
+	// 转换为切片
+	result := make([]string, 0, len(categoryMap))
+	for cat := range categoryMap {
+		result = append(result, cat)
+	}
+	
+	return result, nil
+}
+
+// GetAllTags 获取所有使用过的标签
+func (r *clipboardRepository) GetAllTags() ([]string, error) {
+	query := `SELECT DISTINCT tags FROM clipboard_items WHERE is_deleted = 0 AND tags != '[]' AND tags IS NOT NULL`
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tagSet := make(map[string]bool)
+	
+	for rows.Next() {
+		var tagsJSON string
+		if err := rows.Scan(&tagsJSON); err != nil {
+			continue
+		}
+		
+		var tags []string
+		if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
+			continue
+		}
+		
+		for _, tag := range tags {
+			if tag != "" {
+				tagSet[tag] = true
+			}
+		}
+	}
+
+	// 转换为切片
+	result := make([]string, 0, len(tagSet))
+	for tag := range tagSet {
+		result = append(result, tag)
+	}
+
+	return result, nil
 }

@@ -17,6 +17,7 @@ type App struct {
 	appService       service.AppService
 	clipboardService service.ClipboardService
 	chatService      service.ChatService
+	tagService       service.TagService
 	db               *repository.Database
 }
 
@@ -40,10 +41,12 @@ func NewApp() *App {
 	// 创建仓库层
 	clipboardRepo := repository.NewClipboardRepository(db.DB)
 	chatRepo := repository.NewChatRepository(db.DB)
+	tagRepo := repository.NewTagRepository(db.DB)
 
 	// 创建服务层
-	clipboardService := service.NewClipboardService(clipboardRepo, settings)
 	chatService := service.NewChatService(chatRepo)
+	tagService := service.NewTagService(tagRepo, clipboardRepo)
+	clipboardService := service.NewClipboardService(clipboardRepo, settings, chatService)
 	windowManager := window.NewManager()
 	appService := service.NewAppService(configManager, windowManager, clipboardService, chatService)
 
@@ -51,6 +54,7 @@ func NewApp() *App {
 		appService:       appService,
 		clipboardService: clipboardService,
 		chatService:      chatService,
+		tagService:       tagService,
 		db:               db,
 	}
 }
@@ -113,6 +117,11 @@ func (a *App) UseClipboardItem(id string) error {
 	return a.clipboardService.UseItem(id)
 }
 
+// GenerateTagsForClipboardItem 为剪切板条目生成AI标签
+func (a *App) GenerateTagsForClipboardItem(id string) ([]string, error) {
+	return a.clipboardService.GenerateTagsForItem(a.ctx, id)
+}
+
 // === 回收站管理 API ===
 
 // GetTrashItems 获取回收站条目
@@ -145,6 +154,11 @@ func (a *App) EmptyTrash() error {
 // GetStatistics 获取统计信息
 func (a *App) GetStatistics() (models.Statistics, error) {
 	return a.clipboardService.GetStatistics()
+}
+
+// GetCategoriesAndTags 获取分类和标签列表
+func (a *App) GetCategoriesAndTags() (models.CategoryTagsResponse, error) {
+	return a.clipboardService.GetCategoriesAndTags()
 }
 
 // === 设置管理 API ===
@@ -235,4 +249,116 @@ func (a *App) GenerateChatTitle(message string) (string, error) {
 // GenerateChatTags 生成聊天标签
 func (a *App) GenerateChatTags(message string) ([]string, error) {
 	return a.chatService.GenerateTags(a.ctx, message)
+}
+
+// === 标签管理 API ===
+
+// GetTags 获取所有标签
+func (a *App) GetTags() ([]models.Tag, error) {
+	return a.tagService.GetTags()
+}
+
+// GetTagGroups 获取所有标签分组
+func (a *App) GetTagGroups() ([]models.TagGroup, error) {
+	return a.tagService.GetTagGroups()
+}
+
+// GetTagsByGroup 根据分组获取标签
+func (a *App) GetTagsByGroup(groupID string) ([]models.Tag, error) {
+	return a.tagService.GetTagsByGroup(groupID)
+}
+
+// SearchTags 搜索标签
+func (a *App) SearchTags(query models.TagSearchQuery) ([]models.TagWithStats, error) {
+	return a.tagService.SearchTags(query)
+}
+
+// CreateTag 创建标签
+func (a *App) CreateTag(name, description, color, groupID string) (*models.Tag, error) {
+	return a.tagService.CreateTag(name, description, color, groupID)
+}
+
+// UpdateTag 更新标签
+func (a *App) UpdateTag(tag models.Tag) error {
+	return a.tagService.UpdateTag(tag)
+}
+
+// DeleteTag 删除标签
+func (a *App) DeleteTag(id string) error {
+	return a.tagService.DeleteTag(id)
+}
+
+// CreateTagGroup 创建标签分组
+func (a *App) CreateTagGroup(name, description, color string, sortOrder int) (*models.TagGroup, error) {
+	return a.tagService.CreateTagGroup(name, description, color, sortOrder)
+}
+
+// UpdateTagGroup 更新标签分组
+func (a *App) UpdateTagGroup(group models.TagGroup) error {
+	return a.tagService.UpdateTagGroup(group)
+}
+
+// DeleteTagGroup 删除标签分组
+func (a *App) DeleteTagGroup(id string) error {
+	return a.tagService.DeleteTagGroup(id)
+}
+
+// GetTagsForItem 获取条目的标签
+func (a *App) GetTagsForItem(itemID string) ([]models.Tag, error) {
+	return a.tagService.GetTagsForItem(itemID)
+}
+
+// UpdateItemTags 更新条目标签
+func (a *App) UpdateItemTags(itemID string, tagNames []string) error {
+	return a.tagService.UpdateItemTags(itemID, tagNames)
+}
+
+// AddTagsToItem 为条目添加标签
+func (a *App) AddTagsToItem(itemID string, tagNames []string) error {
+	return a.tagService.AddTagsToItem(itemID, tagNames)
+}
+
+// RemoveTagsFromItem 从条目移除标签
+func (a *App) RemoveTagsFromItem(itemID string, tagNames []string) error {
+	return a.tagService.RemoveTagsFromItem(itemID, tagNames)
+}
+
+// GetTagStatistics 获取标签统计信息
+func (a *App) GetTagStatistics() (models.TagStatistics, error) {
+	return a.tagService.GetTagStatistics()
+}
+
+// GetMostUsedTags 获取最常用标签
+func (a *App) GetMostUsedTags(limit int) ([]models.TagWithStats, error) {
+	return a.tagService.GetMostUsedTags(limit)
+}
+
+// GetRecentTags 获取最近使用标签
+func (a *App) GetRecentTags(limit int) ([]models.TagWithStats, error) {
+	return a.tagService.GetRecentTags(limit)
+}
+
+// SuggestTags 建议标签
+func (a *App) SuggestTags(content string, limit int) ([]string, error) {
+	return a.tagService.SuggestTags(content, limit)
+}
+
+// AutoGenerateTags 自动生成标签
+func (a *App) AutoGenerateTags(content, contentType string) ([]string, error) {
+	return a.tagService.AutoGenerateTags(content, contentType)
+}
+
+// CleanupUnusedTags 清理未使用标签
+func (a *App) CleanupUnusedTags() error {
+	return a.tagService.CleanupUnusedTags()
+}
+
+// MergeTags 合并标签
+func (a *App) MergeTags(sourceTagName, targetTagName string) error {
+	return a.tagService.MergeTags(sourceTagName, targetTagName)
+}
+
+// GetSimilarTags 获取相似标签
+func (a *App) GetSimilarTags(tagName string, limit int) ([]models.Tag, error) {
+	return a.tagService.GetSimilarTags(tagName, limit)
 }

@@ -58,7 +58,7 @@ func ChatPromptSummarize(ctx context.Context, input []*schema.Message, history [
 
 func ChatPromptLabel(ctx context.Context, input []*schema.Message) ([]*schema.Message, error) {
 
-	systemTpl := "你是一个专业的内容分类助手，你的任务是根据用户的输入，生成5个左右的标签。用户输入：{user_input},你只能输出纯 JSON，不要包含任何额外文本、注释或格式标记（如 ```json ```）。请严格输出一个 JSON 格式的结果，不要包含任何额外文本,json key是 tags,value 是字符串数组"
+	systemTpl := "你是一个专业的内容分类助手，你的任务是根据用户的输入，生成最多5个的标签。用户输入：{user_input},你只能输出纯 JSON，不要包含任何额外文本、注释或格式标记（如 ```json ```）。请严格输出一个 JSON 格式的结果，不要包含任何额外文本,json key是 tags,value 是字符串数组"
 
 	chatTpl := prompt.FromMessages(schema.FString,
 		schema.SystemMessage(systemTpl),

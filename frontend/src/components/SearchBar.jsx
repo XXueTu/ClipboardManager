@@ -15,8 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from './ui/textarea';
 import { useToast } from './ui/toast';
 
-import { CATEGORY_OPTIONS } from '../constants';
+import { categoriesToOptions, FALLBACK_CATEGORY_OPTIONS } from '../constants';
 import { getContentTypeIcon } from '../utils/contentTypeUtils.jsx';
+import { useCategoriesAndTags } from '../hooks';
+import TagFilterShadcn from './TagFilterShadcn';
 
 /**
  * 搜索栏组件 - 优化交互设计
@@ -33,8 +35,16 @@ const SearchBar = ({ onSearch, categories, contentTypes, onAddItem, searchResult
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
     
+    // 获取动态分类和标签
+    const { categories: backendCategories, tags: backendTags, loading: categoriesLoading } = useCategoriesAndTags();
+    
+    // 使用后端分类，如果加载中或失败则使用后备分类
+    const categoryOptions = categoriesLoading || backendCategories.length === 0 
+        ? FALLBACK_CATEGORY_OPTIONS 
+        : categoriesToOptions(backendCategories);
+    
     // 确保props有默认值
-    const safeSearchForm = searchForm || { query: '', category: '', type: '', tags: [] };
+    const safeSearchForm = searchForm || { query: '', category: '', type: '', tags: [], tag_mode: 'any' };
     const safeOnSearchFormChange = onSearchFormChange || (() => {});
     
     // 使用安全的props
@@ -93,7 +103,7 @@ const SearchBar = ({ onSearch, categories, contentTypes, onAddItem, searchResult
     };
 
     const handleClear = () => {
-        const clearedForm = { query: '', category: '', type: '', tags: [] };
+        const clearedForm = { query: '', category: '', type: '', tags: [], tag_mode: 'any' };
         handleFormChange(clearedForm);
         onSearch({
             ...clearedForm,
@@ -345,12 +355,19 @@ const SearchBar = ({ onSearch, categories, contentTypes, onAddItem, searchResult
                                     </Select>
                                 </div>
 
-                                {/* 标签筛选 - 预留 */}
+                                {/* 标签筛选 */}
                                 <div className="space-y-3">
                                     <Label className="text-sm font-medium">标签筛选</Label>
-                                    <div className="h-10 flex items-center text-sm text-muted-foreground bg-muted/50 rounded-xl px-3 border-2 border-border/30">
-                                        即将推出...
-                                    </div>
+                                    <TagFilterShadcn
+                                        value={currentSearchForm.tags || []}
+                                        onChange={(tags) => handleFilterChange('tags', tags)}
+                                        tagMode={currentSearchForm.tag_mode || 'any'}
+                                        onTagModeChange={(mode) => handleFilterChange('tag_mode', mode)}
+                                        showModeSelector={true}
+                                        showGroupFilter={false}
+                                        showQuickFilters={true}
+                                        className=""
+                                    />
                                 </div>
                             </div>
 
@@ -418,7 +435,7 @@ const SearchBar = ({ onSearch, categories, contentTypes, onAddItem, searchResult
                                     <SelectValue placeholder="选择分类（可选）" />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-xl">
-                                    {CATEGORY_OPTIONS.map(option => (
+                                    {categoryOptions.map(option => (
                                         <SelectItem key={option.value} value={option.value}>
                                             {option.label}
                                         </SelectItem>

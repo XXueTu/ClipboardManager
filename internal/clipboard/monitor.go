@@ -7,6 +7,7 @@ import (
 
 	clipboardPkg "github.com/atotto/clipboard"
 	"github.com/google/uuid"
+	"github.com/jbrukh/bayesian"
 
 	"react-wails-app/internal/models"
 )
@@ -26,22 +27,20 @@ type ContentProcessor interface {
 
 // Analyzer 内容分析器接口
 type Analyzer interface {
-	DetectContentType(content string) string
 	GenerateTitle(content string) string
-	AutoDetectCategory(content string, contentType string) string
-	AutoGenerateTags(content string, contentType string) []string
+	AutoDetectCategory(content string) string
 	IsLikelyPassword(content string) bool
 }
 
 // monitor 剪切板监听器实现
 type monitor struct {
-	isRunning       bool
-	stopChan        chan bool
-	lastClipboard   string
-	processor       ContentProcessor
-	analyzer        Analyzer
-	settings        *models.Settings
-	tickerInterval  time.Duration
+	isRunning      bool
+	stopChan       chan bool
+	lastClipboard  string
+	processor      ContentProcessor
+	analyzer       Analyzer
+	settings       *models.Settings
+	tickerInterval time.Duration
 }
 
 // NewMonitor 创建新的剪切板监听器
@@ -127,46 +126,36 @@ func (m *monitor) processClipboardContent(content string) {
 }
 
 // analyzer 内容分析器实现
-type analyzer struct{}
+type analyzer struct {
+	classifier *bayesian.Classifier
+}
 
 // NewAnalyzer 创建新的内容分析器
 func NewAnalyzer() Analyzer {
-	return &analyzer{}
+	// 定义分类类别
+	classifier := bayesian.NewClassifier(
+		bayesian.Class(models.CategoryDefault),
+		bayesian.Class(models.CategoryURL),
+		bayesian.Class(models.CategoryFile),
+		bayesian.Class(models.CategoryEmail),
+		bayesian.Class(models.CategoryPhone),
+		bayesian.Class(models.CategoryCode),
+		bayesian.Class(models.CategoryNote),
+		bayesian.Class(models.CategoryCommand),
+		bayesian.Class(models.CategoryJson),
+		bayesian.Class(models.CategoryID),
+		bayesian.Class(models.CategoryAddress),
+		bayesian.Class(models.CategoryNumber),
+	)
+
+	// 训练分类器
+	trainClassifier(classifier)
+
+	return &analyzer{
+		classifier: classifier,
+	}
 }
 
-// DetectContentType 检测内容类型
-func (a *analyzer) DetectContentType(content string) string {
-	// URL检测
-	if strings.HasPrefix(content, "http://") || strings.HasPrefix(content, "https://") {
-		return models.ContentTypeURL
-	}
-
-	// 文件路径检测
-	if strings.Contains(content, "/") && (strings.Contains(content, ".") || strings.HasPrefix(content, "/")) {
-		return models.ContentTypeFile
-	}
-
-	// 邮箱检测
-	if strings.Contains(content, "@") && strings.Contains(content, ".") {
-		return models.ContentTypeEmail
-	}
-
-	// 电话号码检测
-	if len(content) >= 10 && strings.ContainsAny(content, "0123456789-+() ") {
-		digitCount := 0
-		for _, char := range content {
-			if char >= '0' && char <= '9' {
-				digitCount++
-			}
-		}
-		if digitCount >= 10 {
-			return models.ContentTypePhone
-		}
-	}
-
-	// 默认文本
-	return models.ContentTypeText
-}
 
 // GenerateTitle 生成标题
 func (a *analyzer) GenerateTitle(content string) string {
@@ -186,56 +175,216 @@ func (a *analyzer) GenerateTitle(content string) string {
 }
 
 // AutoDetectCategory 自动检测分类
-func (a *analyzer) AutoDetectCategory(content string, contentType string) string {
-	switch contentType {
-	case models.ContentTypeURL:
-		return models.CategoryURL
-	case models.ContentTypeFile:
-		return models.CategoryFile
-	case models.ContentTypeEmail:
-		return models.CategoryEmail
-	case models.ContentTypePhone:
-		return models.CategoryPhone
-	default:
-		// 根据内容关键词分类
-		lower := strings.ToLower(content)
-		if strings.Contains(lower, "password") || strings.Contains(lower, "密码") {
-			return models.CategoryPassword
-		}
-		if strings.Contains(lower, "code") || strings.Contains(lower, "代码") {
-			return models.CategoryCode
-		}
-		if strings.Contains(lower, "note") || strings.Contains(lower, "笔记") {
-			return models.CategoryNote
-		}
+func (a *analyzer) AutoDetectCategory(content string) string {
+	// 使用贝叶斯分类器进行智能分类
+	words := strings.Fields(strings.ToLower(content))
+	if len(words) == 0 {
 		return models.CategoryDefault
 	}
-}
 
-// AutoGenerateTags 自动生成标签
-func (a *analyzer) AutoGenerateTags(content string, contentType string) []string {
-	var tags []string
-
-	// 根据内容类型添加标签
-	tags = append(tags, contentType)
-
-	// 根据长度添加标签
-	if len(content) > 200 {
-		tags = append(tags, "长文本")
-	} else if len(content) < 20 {
-		tags = append(tags, "短文本")
+	// 获取分类结果
+	scores, likely, _ := a.classifier.LogScores(words)
+	if len(scores) == 0 {
+		log.Printf("分类失败: 无法获取分类结果")
+		return models.CategoryDefault
 	}
 
-	// 根据时间添加标签
-	now := time.Now()
-	if now.Hour() < 6 || now.Hour() > 22 {
-		tags = append(tags, "深夜")
-	} else if now.Hour() >= 9 && now.Hour() <= 17 {
-		tags = append(tags, "工作时间")
+	// 如果置信度太低，使用启发式规则
+	if len(scores) > 0 && scores[0] < -10 {
+		return a.fallbackClassification(content)
 	}
 
-	return tags
+	return string(likely)
 }
+
+// fallbackClassification 启发式分类规则（作为贝叶斯分类的后备方案）
+func (a *analyzer) fallbackClassification(content string) string {
+	lower := strings.ToLower(content)
+	
+	// URL检测
+	if strings.HasPrefix(content, "http://") || strings.HasPrefix(content, "https://") || strings.Contains(lower, "www.") {
+		return models.CategoryURL
+	}
+	
+	// 文件路径检测
+	if strings.Contains(content, "/") && (strings.Contains(content, ".") || strings.HasPrefix(content, "/")) {
+		return models.CategoryFile
+	}
+	
+	// 邮箱检测
+	if strings.Contains(content, "@") && strings.Contains(content, ".") && !strings.Contains(content, " ") {
+		return models.CategoryEmail
+	}
+	
+	// 电话号码检测
+	if len(content) >= 10 && strings.ContainsAny(content, "0123456789-+() ") {
+		digitCount := 0
+		for _, char := range content {
+			if char >= '0' && char <= '9' {
+				digitCount++
+			}
+		}
+		if digitCount >= 10 {
+			return models.CategoryPhone
+		}
+	}
+	
+	// JSON检测
+	if strings.HasPrefix(strings.TrimSpace(content), "{") && strings.HasSuffix(strings.TrimSpace(content), "}") {
+		return models.CategoryJson
+	}
+	
+	// 代码检测
+	if strings.Contains(lower, "function") || strings.Contains(lower, "class") || strings.Contains(lower, "import") || strings.Contains(lower, "package") {
+		return models.CategoryCode
+	}
+	
+	// 命令检测
+	if strings.HasPrefix(content, "sudo ") || strings.HasPrefix(content, "git ") || strings.HasPrefix(content, "npm ") || strings.HasPrefix(content, "docker ") {
+		return models.CategoryCommand
+	}
+	
+	// ID检测（长度合适且包含字母数字组合）
+	if len(content) >= 10 && len(content) <= 50 && !strings.Contains(content, " ") {
+		hasLetter := false
+		hasNumber := false
+		for _, char := range content {
+			if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') {
+				hasLetter = true
+			}
+			if char >= '0' && char <= '9' {
+				hasNumber = true
+			}
+		}
+		if hasLetter && hasNumber {
+			return models.CategoryID
+		}
+	}
+	
+	// 地址检测
+	if strings.Contains(lower, "省") || strings.Contains(lower, "市") || strings.Contains(lower, "区") || strings.Contains(lower, "县") || strings.Contains(lower, "街道") {
+		return models.CategoryAddress
+	}
+	
+	// 纯数字检测
+	if len(content) > 0 && strings.TrimSpace(content) != "" {
+		isNumber := true
+		for _, char := range strings.TrimSpace(content) {
+			if !(char >= '0' && char <= '9') && char != '.' && char != '-' && char != '+' {
+				isNumber = false
+				break
+			}
+		}
+		if isNumber {
+			return models.CategoryNumber
+		}
+	}
+	
+	return models.CategoryDefault
+}
+
+// trainClassifier 训练贝叶斯分类器
+func trainClassifier(classifier *bayesian.Classifier) {
+	// 训练URL分类
+	urlSamples := []string{
+		"http://example.com", "https://www.google.com", "https://github.com/user/repo",
+		"www.baidu.com", "api.example.com", "cdn.jsdelivr.net",
+	}
+	for _, sample := range urlSamples {
+		classifier.Learn(strings.Fields(strings.ToLower(sample)), bayesian.Class(models.CategoryURL))
+	}
+	
+	// 训练文件路径分类
+	fileSamples := []string{
+		"/home/user/document.txt", "/var/log/system.log", "C:\\Users\\User\\file.pdf",
+		"./src/main.go", "../config/app.yaml", "/tmp/temp.json",
+	}
+	for _, sample := range fileSamples {
+		classifier.Learn(strings.Fields(strings.ToLower(sample)), bayesian.Class(models.CategoryFile))
+	}
+	
+	// 训练邮箱分类
+	emailSamples := []string{
+		"user@example.com", "admin@company.org", "support@service.net",
+		"info@website.com", "contact@business.co", "hello@startup.io",
+	}
+	for _, sample := range emailSamples {
+		classifier.Learn(strings.Fields(strings.ToLower(sample)), bayesian.Class(models.CategoryEmail))
+	}
+	
+	// 训练电话分类
+	phoneSamples := []string{
+		"138-8888-8888", "400-123-4567", "+86 138 8888 8888",
+		"(010) 6666-7777", "13888888888", "021-12345678",
+	}
+	for _, sample := range phoneSamples {
+		classifier.Learn(strings.Fields(strings.ToLower(sample)), bayesian.Class(models.CategoryPhone))
+	}
+	
+	// 训练代码分类
+	codeSamples := []string{
+		"function main() { return 0; }", "class MyClass { public void method(); }",
+		"import java.util.*; public class", "package main import fmt",
+		"def function_name(): return None", "const variable = 'value';",
+	}
+	for _, sample := range codeSamples {
+		classifier.Learn(strings.Fields(strings.ToLower(sample)), bayesian.Class(models.CategoryCode))
+	}
+	
+	// 训练笔记分类
+	noteSamples := []string{
+		"今天的会议记录", "学习笔记：数据结构", "待办事项列表",
+		"重要提醒事项", "会议纪要", "学习总结",
+	}
+	for _, sample := range noteSamples {
+		classifier.Learn(strings.Fields(strings.ToLower(sample)), bayesian.Class(models.CategoryNote))
+	}
+	
+	// 训练命令分类
+	commandSamples := []string{
+		"sudo apt-get install", "git clone repository", "npm install package",
+		"docker run image", "kubectl get pods", "ssh user@server",
+	}
+	for _, sample := range commandSamples {
+		classifier.Learn(strings.Fields(strings.ToLower(sample)), bayesian.Class(models.CategoryCommand))
+	}
+	
+	// 训练JSON分类
+	jsonSamples := []string{
+		"{\"name\": \"value\", \"key\": \"data\"}", "[{\"id\": 1, \"name\": \"item\"}]",
+		"{\"config\": {\"port\": 8080}}", "{\"status\": \"success\", \"data\": []}",
+	}
+	for _, sample := range jsonSamples {
+		classifier.Learn(strings.Fields(strings.ToLower(sample)), bayesian.Class(models.CategoryJson))
+	}
+	
+	// 训练ID分类
+	idSamples := []string{
+		"abc123def456", "user_id_12345", "session_token_abcdef",
+		"order_20231101_001", "uuid_a1b2c3d4", "auth_token_xyz789",
+	}
+	for _, sample := range idSamples {
+		classifier.Learn(strings.Fields(strings.ToLower(sample)), bayesian.Class(models.CategoryID))
+	}
+	
+	// 训练地址分类
+	addressSamples := []string{
+		"北京市海淀区中关村", "上海市浦东新区陆家嘴", "广东省深圳市南山区",
+		"江苏省南京市玄武区", "浙江省杭州市西湖区", "四川省成都市锦江区",
+	}
+	for _, sample := range addressSamples {
+		classifier.Learn(strings.Fields(strings.ToLower(sample)), bayesian.Class(models.CategoryAddress))
+	}
+	
+	// 训练数字分类
+	numberSamples := []string{
+		"123456", "3.14159", "-42", "+86", "1000000", "0.618",
+	}
+	for _, sample := range numberSamples {
+		classifier.Learn(strings.Fields(strings.ToLower(sample)), bayesian.Class(models.CategoryNumber))
+	}
+}
+
 
 // IsLikelyPassword 检查是否像密码
 func (a *analyzer) IsLikelyPassword(content string) bool {
@@ -284,30 +433,27 @@ func NewItemBuilder(analyzer Analyzer, settings *models.Settings) *ItemBuilder {
 
 // BuildItem 构建剪切板条目
 func (b *ItemBuilder) BuildItem(content string) models.ClipboardItem {
-	contentType := b.analyzer.DetectContentType(content)
 	category := models.CategoryDefault
-	var tags []string
+	var tags []string // 标签默认为空，后续使用AI生成
 
 	if b.settings.AutoCategorize {
-		category = b.analyzer.AutoDetectCategory(content, contentType)
-		tags = b.analyzer.AutoGenerateTags(content, contentType)
+		category = b.analyzer.AutoDetectCategory(content)
 	} else {
 		category = b.settings.DefaultCategory
 	}
 
 	return models.ClipboardItem{
-		ID:          uuid.New().String(),
-		Content:     content,
-		ContentType: contentType,
-		Title:       b.analyzer.GenerateTitle(content),
-		Tags:        tags,
-		Category:    category,
-		IsFavorite:  false,
-		UseCount:    0,
-		IsDeleted:   false,
-		DeletedAt:   nil,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-		LastUsedAt:  time.Now(),
+		ID:         uuid.New().String(),
+		Content:    content,
+		Title:      b.analyzer.GenerateTitle(content),
+		Tags:       tags,
+		Category:   category,
+		IsFavorite: false,
+		UseCount:   0,
+		IsDeleted:  false,
+		DeletedAt:  nil,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+		LastUsedAt: time.Now(),
 	}
 }

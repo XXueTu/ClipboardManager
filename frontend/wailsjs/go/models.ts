@@ -1,5 +1,19 @@
 export namespace models {
 	
+	export class CategoryTagsResponse {
+	    categories: string[];
+	    tags: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CategoryTagsResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.categories = source["categories"];
+	        this.tags = source["tags"];
+	    }
+	}
 	export class ChatMessage {
 	    id: string;
 	    session_id: string;
@@ -227,7 +241,7 @@ export namespace models {
 	    query: string;
 	    category: string;
 	    tags: string[];
-	    type: string;
+	    tag_mode: string;
 	    limit: number;
 	    offset: number;
 	
@@ -240,7 +254,7 @@ export namespace models {
 	        this.query = source["query"];
 	        this.category = source["category"];
 	        this.tags = source["tags"];
-	        this.type = source["type"];
+	        this.tag_mode = source["tag_mode"];
 	        this.limit = source["limit"];
 	        this.offset = source["offset"];
 	    }
@@ -330,7 +344,6 @@ export namespace models {
 	    today_items: number;
 	    week_items: number;
 	    month_items: number;
-	    type_stats: Record<string, number>;
 	    category_stats: Record<string, number>;
 	    top_tags: TagStat[];
 	    recent_items: ClipboardItem[];
@@ -345,10 +358,226 @@ export namespace models {
 	        this.today_items = source["today_items"];
 	        this.week_items = source["week_items"];
 	        this.month_items = source["month_items"];
-	        this.type_stats = source["type_stats"];
 	        this.category_stats = source["category_stats"];
 	        this.top_tags = this.convertValues(source["top_tags"], TagStat);
 	        this.recent_items = this.convertValues(source["recent_items"], ClipboardItem);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Tag {
+	    id: string;
+	    name: string;
+	    description: string;
+	    color: string;
+	    group_id: string;
+	    use_count: number;
+	    is_system: boolean;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	    // Go type: time
+	    last_used_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Tag(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.color = source["color"];
+	        this.group_id = source["group_id"];
+	        this.use_count = source["use_count"];
+	        this.is_system = source["is_system"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	        this.last_used_at = this.convertValues(source["last_used_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TagGroup {
+	    id: string;
+	    name: string;
+	    description: string;
+	    color: string;
+	    sort_order: number;
+	    is_system: boolean;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagGroup(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.color = source["color"];
+	        this.sort_order = source["sort_order"];
+	        this.is_system = source["is_system"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TagSearchQuery {
+	    query: string;
+	    group_id: string;
+	    is_system?: boolean;
+	    sort_by: string;
+	    sort_order: string;
+	    limit: number;
+	    offset: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagSearchQuery(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.query = source["query"];
+	        this.group_id = source["group_id"];
+	        this.is_system = source["is_system"];
+	        this.sort_by = source["sort_by"];
+	        this.sort_order = source["sort_order"];
+	        this.limit = source["limit"];
+	        this.offset = source["offset"];
+	    }
+	}
+	
+	export class TagWithStats {
+	    id: string;
+	    name: string;
+	    description: string;
+	    color: string;
+	    group_id: string;
+	    use_count: number;
+	    is_system: boolean;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	    // Go type: time
+	    last_used_at: any;
+	    item_count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagWithStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.color = source["color"];
+	        this.group_id = source["group_id"];
+	        this.use_count = source["use_count"];
+	        this.is_system = source["is_system"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	        this.last_used_at = this.convertValues(source["last_used_at"], null);
+	        this.item_count = source["item_count"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TagStatistics {
+	    total_tags: number;
+	    system_tags: number;
+	    user_tags: number;
+	    most_used_tags: TagWithStats[];
+	    recent_tags: TagWithStats[];
+	    tag_groups: TagGroup[];
+	    unused_tags: Tag[];
+	
+	    static createFrom(source: any = {}) {
+	        return new TagStatistics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total_tags = source["total_tags"];
+	        this.system_tags = source["system_tags"];
+	        this.user_tags = source["user_tags"];
+	        this.most_used_tags = this.convertValues(source["most_used_tags"], TagWithStats);
+	        this.recent_tags = this.convertValues(source["recent_tags"], TagWithStats);
+	        this.tag_groups = this.convertValues(source["tag_groups"], TagGroup);
+	        this.unused_tags = this.convertValues(source["unused_tags"], Tag);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

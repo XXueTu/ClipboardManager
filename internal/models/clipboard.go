@@ -6,17 +6,17 @@ import "time"
 type ClipboardItem struct {
 	ID          string     `json:"id" db:"id"`
 	Content     string     `json:"content" db:"content"`
-	ContentType string     `json:"content_type" db:"content_type"` // text, image, file, url
+	ContentType string     `json:"content_type" db:"content_type"`
 	Title       string     `json:"title" db:"title"`
-	Tags        []string   `json:"tags" db:"tags"`
-	Category    string     `json:"category" db:"category"`
-	IsFavorite  bool       `json:"is_favorite" db:"is_favorite"`
-	UseCount    int        `json:"use_count" db:"use_count"`
-	IsDeleted   bool       `json:"is_deleted" db:"is_deleted"`
-	DeletedAt   *time.Time `json:"deleted_at" db:"deleted_at"`
-	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
-	LastUsedAt  time.Time  `json:"last_used_at" db:"last_used_at"`
+	Tags       []string   `json:"tags" db:"tags"`
+	Category   string     `json:"category" db:"category"`
+	IsFavorite bool       `json:"is_favorite" db:"is_favorite"`
+	UseCount   int        `json:"use_count" db:"use_count"`
+	IsDeleted  bool       `json:"is_deleted" db:"is_deleted"`
+	DeletedAt  *time.Time `json:"deleted_at" db:"deleted_at"`
+	CreatedAt  time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at" db:"updated_at"`
+	LastUsedAt time.Time  `json:"last_used_at" db:"last_used_at"`
 }
 
 // SearchQuery 搜索查询参数
@@ -24,7 +24,7 @@ type SearchQuery struct {
 	Query    string   `json:"query"`
 	Category string   `json:"category"`
 	Tags     []string `json:"tags"`
-	Type     string   `json:"type"`
+	TagMode  string   `json:"tag_mode"` // all, any, none
 	Limit    int      `json:"limit"`
 	Offset   int      `json:"offset"`
 }
@@ -44,10 +44,23 @@ type Statistics struct {
 	TodayItems    int             `json:"today_items"`
 	WeekItems     int             `json:"week_items"`
 	MonthItems    int             `json:"month_items"`
-	TypeStats     map[string]int  `json:"type_stats"`
 	CategoryStats map[string]int  `json:"category_stats"`
 	TopTags       []TagStat       `json:"top_tags"`
 	RecentItems   []ClipboardItem `json:"recent_items"`
+}
+
+// Tag 标签模型
+type Tag struct {
+	ID          string    `json:"id" db:"id"`
+	Name        string    `json:"name" db:"name"`
+	Description string    `json:"description" db:"description"`
+	Color       string    `json:"color" db:"color"`
+	GroupID     string    `json:"group_id" db:"group_id"`
+	UseCount    int       `json:"use_count" db:"use_count"`
+	IsSystem    bool      `json:"is_system" db:"is_system"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+	LastUsedAt  time.Time `json:"last_used_at" db:"last_used_at"`
 }
 
 // TagStat 标签统计
@@ -56,24 +69,82 @@ type TagStat struct {
 	Count int    `json:"count"`
 }
 
-// ContentType 内容类型常量
-const (
-	ContentTypeText     = "text"
-	ContentTypeURL      = "url"
-	ContentTypeEmail    = "email"
-	ContentTypePhone    = "phone"
-	ContentTypeFile     = "file"
-	ContentTypePassword = "password"
-)
+// TagGroup 标签分组
+type TagGroup struct {
+	ID          string    `json:"id" db:"id"`
+	Name        string    `json:"name" db:"name"`
+	Description string    `json:"description" db:"description"`
+	Color       string    `json:"color" db:"color"`
+	SortOrder   int       `json:"sort_order" db:"sort_order"`
+	IsSystem    bool      `json:"is_system" db:"is_system"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// TagWithStats 带统计信息的标签
+type TagWithStats struct {
+	Tag
+	ItemCount int `json:"item_count"`
+}
+
+// TagSearchQuery 标签搜索查询
+type TagSearchQuery struct {
+	Query     string `json:"query"`
+	GroupID   string `json:"group_id"`
+	IsSystem  *bool  `json:"is_system"`
+	SortBy    string `json:"sort_by"`    // name, use_count, created_at, last_used_at
+	SortOrder string `json:"sort_order"` // asc, desc
+	Limit     int    `json:"limit"`
+	Offset    int    `json:"offset"`
+}
+
+// TagStatistics 标签统计信息
+type TagStatistics struct {
+	TotalTags     int            `json:"total_tags"`
+	SystemTags    int            `json:"system_tags"`
+	UserTags      int            `json:"user_tags"`
+	MostUsedTags  []TagWithStats `json:"most_used_tags"`
+	RecentTags    []TagWithStats `json:"recent_tags"`
+	TagGroups     []TagGroup     `json:"tag_groups"`
+	UnusedTags    []Tag          `json:"unused_tags"`
+}
+
+// CategoryTagsResponse 分类和标签响应
+type CategoryTagsResponse struct {
+	Categories []string `json:"categories"`
+	Tags       []string `json:"tags"`
+}
 
 // Category 分类常量
 const (
-	CategoryDefault  = "未分类"
-	CategoryURL      = "网址"
-	CategoryFile     = "文件"
-	CategoryEmail    = "邮箱"
-	CategoryPhone    = "电话"
-	CategoryPassword = "密码"
-	CategoryCode     = "代码"
-	CategoryNote     = "笔记"
+	CategoryDefault = "未分类"
+	CategoryURL     = "网址"
+	CategoryFile    = "文件"
+	CategoryEmail   = "邮箱"
+	CategoryPhone   = "电话"
+	CategoryCode    = "代码"
+	CategoryNote    = "笔记"
+	CategoryCommand = "命令"
+	CategoryJson    = "JSON"
+	CategoryID      = "标识符"
+	CategoryAddress = "地址"
+	CategoryNumber  = "数字"
 )
+
+// GetAllCategories 获取所有分类
+func GetAllCategories() []string {
+	return []string{
+		CategoryDefault,
+		CategoryURL,
+		CategoryFile,
+		CategoryEmail,
+		CategoryPhone,
+		CategoryCode,
+		CategoryNote,
+		CategoryCommand,
+		CategoryJson,
+		CategoryID,
+		CategoryAddress,
+		CategoryNumber,
+	}
+}

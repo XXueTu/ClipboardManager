@@ -12,6 +12,7 @@ require (
 	github.com/cloudwego/eino v0.3.49
 	github.com/cloudwego/eino-ext/components/model/openai v0.0.0-20250707040601-2fab92740585
 	github.com/google/uuid v1.6.0
+	github.com/jbrukh/bayesian v0.0.0-20231117143245-13ae6f916c7a
 	github.com/mattn/go-sqlite3 v1.14.17
 )
 

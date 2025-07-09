@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"log"
+	"time"
 
 	clipboardPkg "github.com/atotto/clipboard"
 
@@ -33,10 +35,16 @@ type ClipboardService interface {
 	// 统计信息
 	GetStatistics() (models.Statistics, error)
 
+	// 分类和标签
+	GetCategoriesAndTags() (models.CategoryTagsResponse, error)
+
 	// 监听控制
 	StartMonitoring() error
 	StopMonitoring()
 	IsMonitoring() bool
+
+	// AI功能
+	GenerateTagsForItem(ctx context.Context, id string) ([]string, error)
 }
 
 // clipboardService 剪切板服务实现
@@ -45,10 +53,11 @@ type clipboardService struct {
 	monitor     clipboard.Monitor
 	itemBuilder *clipboard.ItemBuilder
 	settings    *models.Settings
+	chatService ChatService
 }
 
 // NewClipboardService 创建新的剪切板服务
-func NewClipboardService(repo repository.ClipboardRepository, settings *models.Settings) ClipboardService {
+func NewClipboardService(repo repository.ClipboardRepository, settings *models.Settings, chatService ChatService) ClipboardService {
 	analyzer := clipboard.NewAnalyzer()
 	monitor := clipboard.NewMonitor(settings)
 	itemBuilder := clipboard.NewItemBuilder(analyzer, settings)
@@ -58,6 +67,7 @@ func NewClipboardService(repo repository.ClipboardRepository, settings *models.S
 		monitor:     monitor,
 		itemBuilder: itemBuilder,
 		settings:    settings,
+		chatService: chatService,
 	}
 
 	// 设置监听器的内容处理器
@@ -198,11 +208,72 @@ func (s *clipboardService) IsMonitoring() bool {
 func (s *clipboardService) UpdateSettings(settings *models.Settings) {
 	s.settings = settings
 	s.itemBuilder = clipboard.NewItemBuilder(clipboard.NewAnalyzer(), settings)
-	
+
 	// 根据新设置调整监听状态
 	if settings.AutoCapture && !s.monitor.IsRunning() {
 		s.monitor.Start()
 	} else if !settings.AutoCapture && s.monitor.IsRunning() {
 		s.monitor.Stop()
 	}
+}
+
+// GenerateTagsForItem 为剪切板条目生成AI标签
+func (s *clipboardService) GenerateTagsForItem(ctx context.Context, id string) ([]string, error) {
+	// 获取条目
+	item, err := s.repo.GetByID(id)
+	if err != nil {
+		log.Printf("❌ 获取剪切板条目失败: %v", err)
+		return nil, err
+	}
+
+	// 使用AI生成标签
+	tags, err := s.chatService.GenerateTags(ctx, item.Content)
+	if err != nil {
+		log.Printf("❌ AI标签生成失败: %v", err)
+		return nil, err
+	}
+
+	// 合并现有标签和AI生成的标签，去重
+	existingTags := make(map[string]bool)
+	for _, tag := range item.Tags {
+		existingTags[tag] = true
+	}
+
+	var newTags []string
+	for _, tag := range tags {
+		if !existingTags[tag] {
+			newTags = append(newTags, tag)
+		}
+	}
+
+	// 更新条目的标签
+	allTags := append(item.Tags, newTags...)
+	item.Tags = allTags
+	item.UpdatedAt = time.Now()
+
+	if err := s.repo.Update(*item); err != nil {
+		log.Printf("❌ 更新剪切板条目标签失败: %v", err)
+		return nil, err
+	}
+
+	log.Printf("✅ 为条目 %s 生成了 %d 个新标签", item.Title, len(newTags))
+	return newTags, nil
+}
+
+// GetCategoriesAndTags 获取分类和标签列表
+func (s *clipboardService) GetCategoriesAndTags() (models.CategoryTagsResponse, error) {
+	categories, err := s.repo.GetAllCategories()
+	if err != nil {
+		return models.CategoryTagsResponse{}, err
+	}
+	
+	tags, err := s.repo.GetAllTags()
+	if err != nil {
+		return models.CategoryTagsResponse{}, err
+	}
+	
+	return models.CategoryTagsResponse{
+		Categories: categories,
+		Tags:       tags,
+	}, nil
 }

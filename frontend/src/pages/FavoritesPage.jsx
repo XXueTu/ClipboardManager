@@ -8,6 +8,7 @@ import { useToast } from '../components/ui/toast';
 
 import ClipboardItemCard from '../components/ClipboardItemCard';
 import SearchBar from '../components/SearchBar';
+import { useCategoriesAndTags } from '../hooks';
 
 /**
  * 收藏页面组件
@@ -20,17 +21,22 @@ import SearchBar from '../components/SearchBar';
  * @param {Function} props.onRefresh - 刷新回调函数
  * @param {Function} props.onSearch - 搜索回调函数
  * @param {Function} props.onAddItem - 添加条目回调函数
+ * @param {Function} props.onGenerateAITags - 生成AI标签回调函数
  * @param {Object} props.globalSearchForm - 全局搜索表单状态
  * @param {Function} props.onSearchFormChange - 搜索表单变化回调
  */
-const FavoritesPage = ({ favoriteItems, onCopy, onToggleFavorite, onDelete, onEdit, onRefresh, onSearch, onAddItem, globalSearchForm, onSearchFormChange }) => {
+const FavoritesPage = ({ favoriteItems, onCopy, onToggleFavorite, onDelete, onEdit, onRefresh, onSearch, onAddItem, onGenerateAITags, globalSearchForm, onSearchFormChange }) => {
     const { toast } = useToast();
+    
+    // 获取动态分类和标签
+    const { categories: backendCategories } = useCategoriesAndTags();
+    
     const [searchResult, setSearchResult] = useState(null);
     const [loading, setLoading] = useState(false);
 
     const handleSearch = async (query) => {
         // 检查是否有搜索条件
-        const hasSearchCondition = query.query || query.category || query.type || query.tags?.length > 0;
+        const hasSearchCondition = query.query || query.category || query.tags?.length > 0;
         
         if (!hasSearchCondition) {
             // 如果没有搜索条件，清除搜索结果
@@ -121,10 +127,11 @@ const FavoritesPage = ({ favoriteItems, onCopy, onToggleFavorite, onDelete, onEd
         }
     }, [favoriteItems]);
 
-    // 获取分类和类型列表 - 安全处理
+    // 获取分类和类型列表 - 使用后端分类
     const safeFavoriteItems = Array.isArray(favoriteItems) ? favoriteItems : [];
-    const categories = [...new Set(safeFavoriteItems.map(item => item?.category).filter(Boolean))];
-    const contentTypes = [...new Set(safeFavoriteItems.map(item => item?.content_type).filter(Boolean))];
+    const categories = backendCategories.length > 0 ? backendCategories : [...new Set(safeFavoriteItems.map(item => item?.category).filter(Boolean))];
+    // 移除content_type相关逻辑，因为我们不再使用该字段
+    const contentTypes = [];
     
     // 判断是否有搜索活动
     const hasSearchActivity = searchResult !== null;
@@ -209,6 +216,7 @@ const FavoritesPage = ({ favoriteItems, onCopy, onToggleFavorite, onDelete, onEd
                             onToggleFavorite={handleToggleFavoriteWithUpdate}
                             onDelete={onDelete}
                             onEdit={onEdit}
+                            onGenerateAITags={onGenerateAITags}
                             isFavorites={true}
                         />
                     ))}

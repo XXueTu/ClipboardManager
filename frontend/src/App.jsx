@@ -4,6 +4,7 @@ import {
     Inbox,
     MessageCircle,
     Settings,
+    Tag,
     Trash2
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -12,6 +13,7 @@ import {
     CreateClipboardItem,
     DeleteClipboardItem,
     EmptyTrash,
+    GenerateTagsForClipboardItem,
     PermanentDeleteClipboardItem,
     RestoreClipboardItem,
     SearchClipboardItems,
@@ -27,9 +29,10 @@ import { ToastProvider, useToast } from './components/ui/toast';
 // 导入组件和页面
 import { ClipboardItemCard, ErrorBoundary, SearchBar } from './components';
 import { ChatPage, FavoritesPage, SettingsPage, StatisticsPage, TrashPage } from './pages';
+import TagManagementPage from './pages/TagManagementPage';
 
 // 导入 Hooks
-import { useClipboardData, useKeyboardShortcuts, useWindowState } from './hooks';
+import { useClipboardData, useKeyboardShortcuts, useWindowState, useCategoriesAndTags } from './hooks';
 
 // 导入常量
 import { SEARCH_ANIMATION_STYLE } from './constants';
@@ -69,6 +72,9 @@ function AppContent() {
     const { windowState } = useWindowState();
     useKeyboardShortcuts();
     
+    // 获取动态分类和标签
+    const { categories: backendCategories, tags: backendTags } = useCategoriesAndTags();
+    
     const [searchResult, setSearchResult] = useState(null);
     const [loading, setLoading] = useState(false);
     
@@ -76,8 +82,8 @@ function AppContent() {
     const [globalSearchForm, setGlobalSearchForm] = useState({
         query: '',
         category: '',
-        type: '',
-        tags: []
+        tags: [],
+        tag_mode: 'any'
     });
 
     // 初始化数据
@@ -87,7 +93,7 @@ function AppContent() {
 
     const handleSearch = async (query) => {
         // 检查是否有搜索条件
-        const hasSearchCondition = query.query || query.category || query.type || query.tags?.length > 0;
+        const hasSearchCondition = query.query || query.category || query.tags?.length > 0;
         
         if (!hasSearchCondition) {
             // 如果没有搜索条件，清除搜索结果
@@ -269,10 +275,37 @@ function AppContent() {
         }
     };
 
-    // 获取分类和类型列表 - 安全处理
+    const handleGenerateAITags = async (id) => {
+        try {
+            const newTags = await GenerateTagsForClipboardItem(id);
+            
+            // 刷新数据以获取最新的标签
+            loadClipboardItems();
+            loadFavoriteItems();
+            
+            // 如果有搜索结果，也需要刷新搜索结果
+            if (searchResult) {
+                setTimeout(() => {
+                    handleSearch({
+                        ...globalSearchForm,
+                        limit: 50,
+                        offset: 0
+                    });
+                }, 200);
+            }
+            
+            return newTags;
+        } catch (error) {
+            console.error('AI标签生成失败:', error);
+            throw error;
+        }
+    };
+
+    // 获取分类和类型列表 - 使用后端API提供的分类，不再从内容类型生成
     const safeClipboardItems = Array.isArray(clipboardItems) ? clipboardItems : [];
-    const categories = [...new Set(safeClipboardItems.map(item => item?.category).filter(Boolean))];
-    const contentTypes = [...new Set(safeClipboardItems.map(item => item?.content_type).filter(Boolean))];
+    const categories = backendCategories.length > 0 ? backendCategories : [...new Set(safeClipboardItems.map(item => item?.category).filter(Boolean))];
+    // 移除content_type相关逻辑，因为我们不再使用该字段
+    const contentTypes = [];
     
     // 判断是否有搜索活动（搜索查询或筛选条件）
     const hasSearchActivity = searchResult !== null;
@@ -370,6 +403,7 @@ function AppContent() {
                             onToggleFavorite={handleToggleFavorite}
                             onDelete={handleDeleteItem}
                             onEdit={handleEditItem}
+                            onGenerateAITags={handleGenerateAITags}
                         />
                     ))}
                 </div>
@@ -392,7 +426,7 @@ function AppContent() {
 
                         {/* 主要内容 - 使用Tabs替代侧边栏 */}
                         <Tabs defaultValue="clipboard" onValueChange={handleTabChange} className="h-full flex flex-col">
-                            <TabsList className="grid w-full grid-cols-6 mb-6 bg-muted/50 p-1 rounded-xl">
+                            <TabsList className="grid w-full grid-cols-7 mb-6 bg-muted/50 p-1 rounded-xl">
                                 <TabsTrigger value="clipboard" className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg">
                                     <Inbox className="h-4 w-4" />
                                     <span className="hidden sm:inline">剪切板</span>
@@ -404,6 +438,10 @@ function AppContent() {
                                 <TabsTrigger value="chat" className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg">
                                     <MessageCircle className="h-4 w-4 text-blue-500" />
                                     <span className="hidden sm:inline">对话</span>
+                                </TabsTrigger>
+                                <TabsTrigger value="tags" className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg">
+                                    <Tag className="h-4 w-4 text-green-500" />
+                                    <span className="hidden sm:inline">标签</span>
                                 </TabsTrigger>
                                 <TabsTrigger value="trash" className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg">
                                     <Trash2 className="h-4 w-4" />
@@ -438,6 +476,7 @@ function AppContent() {
                                                 onRefresh={loadFavoriteItems}
                                                 onSearch={handleSearch}
                                                 onAddItem={handleAddItem}
+                                                onGenerateAITags={handleGenerateAITags}
                                                 globalSearchForm={globalSearchForm}
                                                 onSearchFormChange={handleSearchFormChange}
                                             />
@@ -449,6 +488,14 @@ function AppContent() {
                                     <ErrorBoundary>
                                         <div className="flex-1 overflow-y-auto">
                                             <ChatPage />
+                                        </div>
+                                    </ErrorBoundary>
+                                </TabsContent>
+
+                                <TabsContent value="tags" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
+                                    <ErrorBoundary>
+                                        <div className="flex-1 overflow-y-auto">
+                                            <TagManagementPage />
                                         </div>
                                     </ErrorBoundary>
                                 </TabsContent>
