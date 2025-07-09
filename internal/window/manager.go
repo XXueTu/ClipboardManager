@@ -9,7 +9,7 @@ import (
 	hook "github.com/robotn/gohook"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"react-wails-app/internal/models"
+	"Sid/internal/models"
 )
 
 // Manager 窗口管理器接口

@@ -1,12 +1,11 @@
 package repository
 
 import (
+	"Sid/internal/models"
 	"database/sql"
 	"fmt"
 	"strings"
 	"time"
-
-	"react-wails-app/internal/models"
 )
 
 // ClipboardRepository 剪切板数据仓库接口
@@ -371,23 +370,23 @@ func (r *clipboardRepository) GetAllCategories() ([]string, error) {
 	// 合并预定义的分类
 	allCategories := models.GetAllCategories()
 	categoryMap := make(map[string]bool)
-	
+
 	// 先添加预定义的分类
 	for _, cat := range allCategories {
 		categoryMap[cat] = true
 	}
-	
+
 	// 再添加数据库中使用过的分类
 	for _, cat := range categories {
 		categoryMap[cat] = true
 	}
-	
+
 	// 转换为切片
 	result := make([]string, 0, len(categoryMap))
 	for cat := range categoryMap {
 		result = append(result, cat)
 	}
-	
+
 	return result, nil
 }
 
@@ -438,7 +437,7 @@ func (r *clipboardRepository) loadTagsForItem(itemID string) ([]models.Tag, erro
 	for rows.Next() {
 		var tag models.Tag
 		var groupID sql.NullString
-		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.Color, &groupID, 
+		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.Color, &groupID,
 			&tag.UseCount, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt)
 		if err != nil {
 			continue

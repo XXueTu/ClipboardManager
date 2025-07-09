@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"strings"
 
-	"react-wails-app/internal/config"
-	"react-wails-app/internal/models"
-	"react-wails-app/internal/window"
+	"Sid/internal/config"
+	"Sid/internal/models"
+	"Sid/internal/window"
 )
 
 // AppService 应用程序服务接口

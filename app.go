@@ -1,14 +1,13 @@
 package main
 
 import (
+	"Sid/internal/config"
+	"Sid/internal/models"
+	"Sid/internal/repository"
+	"Sid/internal/service"
+	"Sid/internal/window"
 	"context"
 	"log"
-
-	"react-wails-app/internal/config"
-	"react-wails-app/internal/models"
-	"react-wails-app/internal/repository"
-	"react-wails-app/internal/service"
-	"react-wails-app/internal/window"
 )
 
 // App 应用程序主结构体

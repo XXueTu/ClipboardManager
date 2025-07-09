@@ -8,9 +8,9 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	model "react-wails-app/internal/agent"
-	"react-wails-app/internal/models"
-	"react-wails-app/internal/repository"
+	model "Sid/internal/agent"
+	"Sid/internal/models"
+	"Sid/internal/repository"
 )
 
 // TagService 标签服务接口

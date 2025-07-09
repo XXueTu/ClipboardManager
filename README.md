@@ -235,7 +235,7 @@ wails build
 ### 运行应用
 ```bash
 # 运行构建的应用
-./build/bin/react-wails-app.app/Contents/MacOS/react-wails-app
+./build/bin/Sid.app/Contents/MacOS/Sid
 ```
 
 ## 📋 使用指南

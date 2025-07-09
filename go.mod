@@ -1,4 +1,4 @@
-module react-wails-app
+module Sid
 
 go 1.23.0
 

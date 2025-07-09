@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"react-wails-app/internal/models"
+	"Sid/internal/models"
 )
 
 // ChatRepository 聊天数据仓库接口

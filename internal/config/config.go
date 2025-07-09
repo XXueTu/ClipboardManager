@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"react-wails-app/internal/models"
+	"Sid/internal/models"
 )
 
 // Manager 配置管理器接口

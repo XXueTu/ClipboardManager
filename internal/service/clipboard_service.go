@@ -6,9 +6,9 @@ import (
 
 	clipboardPkg "github.com/atotto/clipboard"
 
-	"react-wails-app/internal/clipboard"
-	"react-wails-app/internal/models"
-	"react-wails-app/internal/repository"
+	"Sid/internal/clipboard"
+	"Sid/internal/models"
+	"Sid/internal/repository"
 )
 
 // ClipboardService 剪切板服务接口

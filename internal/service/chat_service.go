@@ -11,9 +11,9 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/google/uuid"
 
-	model "react-wails-app/internal/agent"
-	"react-wails-app/internal/models"
-	"react-wails-app/internal/repository"
+	model "Sid/internal/agent"
+	"Sid/internal/models"
+	"Sid/internal/repository"
 )
 
 // ChatService 聊天服务接口

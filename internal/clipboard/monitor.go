@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	clipboardPkg "github.com/atotto/clipboard"
+	"github.com/atotto/clipboard"
 	"github.com/google/uuid"
 	"github.com/jbrukh/bayesian"
 
-	"react-wails-app/internal/models"
+	"Sid/internal/models"
 )
 
 // Monitor 剪切板监听器接口
@@ -101,7 +101,7 @@ func (m *monitor) monitorLoop() {
 		case <-m.stopChan:
 			return
 		case <-ticker.C:
-			if content, err := clipboardPkg.ReadAll(); err == nil {
+			if content, err := clipboard.ReadAll(); err == nil {
 				if content != "" && content != m.lastClipboard {
 					m.lastClipboard = content
 					m.processClipboardContent(content)
