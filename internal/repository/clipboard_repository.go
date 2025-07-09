@@ -297,7 +297,6 @@ func (r *clipboardRepository) UseItem(id string) error {
 	return err
 }
 
-
 // scanItems 扫描数据库行到剪切板条目列表
 func (r *clipboardRepository) scanItems(rows *sql.Rows) ([]models.ClipboardItem, error) {
 	var items []models.ClipboardItem

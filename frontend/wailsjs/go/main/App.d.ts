@@ -4,9 +4,25 @@ import {models} from '../models';
 
 export function BatchPermanentDelete(arg1:Array<string>):Promise<void>;
 
+export function CreateChatSession(arg1:string):Promise<models.ChatSession>;
+
+export function CreateClipboardItem(arg1:string):Promise<void>;
+
+export function DeleteChatSession(arg1:string):Promise<void>;
+
 export function DeleteClipboardItem(arg1:string):Promise<void>;
 
 export function EmptyTrash():Promise<void>;
+
+export function GenerateChatTags(arg1:string):Promise<Array<string>>;
+
+export function GenerateChatTitle(arg1:string):Promise<string>;
+
+export function GetChatMessages(arg1:string,arg2:number,arg3:number):Promise<models.ChatMessageListResponse>;
+
+export function GetChatSession(arg1:string):Promise<models.ChatSession>;
+
+export function GetChatSessions():Promise<models.ChatSessionListResponse>;
 
 export function GetClipboardItems(arg1:number,arg2:number):Promise<Array<models.ClipboardItem>>;
 
@@ -26,11 +42,15 @@ export function RestoreClipboardItem(arg1:string):Promise<void>;
 
 export function SearchClipboardItems(arg1:models.SearchQuery):Promise<models.SearchResult>;
 
+export function SendChatMessage(arg1:string,arg2:string):Promise<models.ChatMessage>;
+
 export function SetScreenSize(arg1:number,arg2:number):Promise<void>;
 
 export function ShowWindow():Promise<void>;
 
 export function ToggleWindow():Promise<void>;
+
+export function UpdateChatSession(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateClipboardItem(arg1:models.ClipboardItem):Promise<void>;
 

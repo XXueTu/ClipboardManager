@@ -16,6 +16,7 @@ type App struct {
 	ctx              context.Context
 	appService       service.AppService
 	clipboardService service.ClipboardService
+	chatService      service.ChatService
 	db               *repository.Database
 }
 
@@ -38,15 +39,18 @@ func NewApp() *App {
 
 	// 创建仓库层
 	clipboardRepo := repository.NewClipboardRepository(db.DB)
+	chatRepo := repository.NewChatRepository(db.DB)
 
 	// 创建服务层
 	clipboardService := service.NewClipboardService(clipboardRepo, settings)
+	chatService := service.NewChatService(chatRepo)
 	windowManager := window.NewManager()
-	appService := service.NewAppService(configManager, windowManager, clipboardService)
+	appService := service.NewAppService(configManager, windowManager, clipboardService, chatService)
 
 	return &App{
 		appService:       appService,
 		clipboardService: clipboardService,
+		chatService:      chatService,
 		db:               db,
 	}
 }
@@ -87,6 +91,11 @@ func (a *App) GetClipboardItems(limit, offset int) ([]models.ClipboardItem, erro
 // SearchClipboardItems 搜索剪切板条目
 func (a *App) SearchClipboardItems(query models.SearchQuery) (models.SearchResult, error) {
 	return a.clipboardService.SearchItems(query)
+}
+
+// CreateClipboardItem 创建剪切板条目
+func (a *App) CreateClipboardItem(content string) error {
+	return a.clipboardService.CreateItem(content)
 }
 
 // UpdateClipboardItem 更新剪切板条目
@@ -179,4 +188,51 @@ func (a *App) GetWindowState() models.WindowState {
 // SetScreenSize 设置屏幕大小
 func (a *App) SetScreenSize(width, height int) {
 	a.appService.SetScreenSize(width, height)
+}
+
+// === 聊天管理 API ===
+
+// CreateChatSession 创建聊天会话
+func (a *App) CreateChatSession(title string) (*models.ChatSession, error) {
+	return a.chatService.CreateSession(a.ctx, title)
+}
+
+// GetChatSessions 获取聊天会话列表
+func (a *App) GetChatSessions() (*models.ChatSessionListResponse, error) {
+	return a.chatService.ListSessions(a.ctx)
+}
+
+// GetChatSession 获取聊天会话
+func (a *App) GetChatSession(sessionID string) (*models.ChatSession, error) {
+	return a.chatService.GetSession(a.ctx, sessionID)
+}
+
+// UpdateChatSession 更新聊天会话
+func (a *App) UpdateChatSession(sessionID string, title string) error {
+	return a.chatService.UpdateSession(a.ctx, sessionID, title)
+}
+
+// DeleteChatSession 删除聊天会话
+func (a *App) DeleteChatSession(sessionID string) error {
+	return a.chatService.DeleteSession(a.ctx, sessionID)
+}
+
+// SendChatMessage 发送聊天消息
+func (a *App) SendChatMessage(sessionID, message string) (*models.ChatMessage, error) {
+	return a.chatService.SendMessage(a.ctx, sessionID, message)
+}
+
+// GetChatMessages 获取聊天消息列表
+func (a *App) GetChatMessages(sessionID string, limit, offset int) (*models.ChatMessageListResponse, error) {
+	return a.chatService.GetMessages(a.ctx, sessionID, limit, offset)
+}
+
+// GenerateChatTitle 生成聊天标题
+func (a *App) GenerateChatTitle(message string) (string, error) {
+	return a.chatService.GenerateTitle(a.ctx, message)
+}
+
+// GenerateChatTags 生成聊天标签
+func (a *App) GenerateChatTags(message string) ([]string, error) {
+	return a.chatService.GenerateTags(a.ctx, message)
 }

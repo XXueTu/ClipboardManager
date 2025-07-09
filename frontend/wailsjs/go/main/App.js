@@ -6,12 +6,44 @@ export function BatchPermanentDelete(arg1) {
   return window['go']['main']['App']['BatchPermanentDelete'](arg1);
 }
 
+export function CreateChatSession(arg1) {
+  return window['go']['main']['App']['CreateChatSession'](arg1);
+}
+
+export function CreateClipboardItem(arg1) {
+  return window['go']['main']['App']['CreateClipboardItem'](arg1);
+}
+
+export function DeleteChatSession(arg1) {
+  return window['go']['main']['App']['DeleteChatSession'](arg1);
+}
+
 export function DeleteClipboardItem(arg1) {
   return window['go']['main']['App']['DeleteClipboardItem'](arg1);
 }
 
 export function EmptyTrash() {
   return window['go']['main']['App']['EmptyTrash']();
+}
+
+export function GenerateChatTags(arg1) {
+  return window['go']['main']['App']['GenerateChatTags'](arg1);
+}
+
+export function GenerateChatTitle(arg1) {
+  return window['go']['main']['App']['GenerateChatTitle'](arg1);
+}
+
+export function GetChatMessages(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetChatMessages'](arg1, arg2, arg3);
+}
+
+export function GetChatSession(arg1) {
+  return window['go']['main']['App']['GetChatSession'](arg1);
+}
+
+export function GetChatSessions() {
+  return window['go']['main']['App']['GetChatSessions']();
 }
 
 export function GetClipboardItems(arg1, arg2) {
@@ -50,6 +82,10 @@ export function SearchClipboardItems(arg1) {
   return window['go']['main']['App']['SearchClipboardItems'](arg1);
 }
 
+export function SendChatMessage(arg1, arg2) {
+  return window['go']['main']['App']['SendChatMessage'](arg1, arg2);
+}
+
 export function SetScreenSize(arg1, arg2) {
   return window['go']['main']['App']['SetScreenSize'](arg1, arg2);
 }
@@ -60,6 +96,10 @@ export function ShowWindow() {
 
 export function ToggleWindow() {
   return window['go']['main']['App']['ToggleWindow']();
+}
+
+export function UpdateChatSession(arg1, arg2) {
+  return window['go']['main']['App']['UpdateChatSession'](arg1, arg2);
 }
 
 export function UpdateClipboardItem(arg1) {

@@ -1,0 +1,80 @@
+/* 动画效果样式 */
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(-10px);
+        opacity: 0;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* 搜索容器动画 */
+.search-container:hover {
+    transform: translateY(-1px);
+}
+
+/* 筛选选项悬浮动画 */
+.filter-option:hover {
+    background-color: rgba(24,144,255,0.08);
+}
+
+/* 内容点击区域动画 */
+.content-clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.content-clickable:hover {
+    background-color: rgba(24,144,255,0.04);
+    border-radius: 4px;
+}
+
+/* 卡片悬浮动画 */
+.card-hover {
+    transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* 按钮动画 */
+.button-hover {
+    transition: all 0.2s ease;
+}
+
+.button-hover:hover {
+    transform: scale(1.05);
+}
