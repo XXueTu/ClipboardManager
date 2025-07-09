@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { GetWindowState } from '../../wailsjs/go/main/App';
 
 /**

@@ -14,6 +14,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import remarkGfm from 'remark-gfm';
 import {
     CreateChatSession,
     DeleteChatSession,
@@ -29,6 +30,20 @@ import { useToast } from '../components/ui/toast';
 
 // Markdown渲染组件
 const MessageContent = ({ content, isUser = false, isStreaming = false }) => {
+    const [renderKey, setRenderKey] = useState(0);
+    
+    // 监听isStreaming变化，当从true变为false时强制重新渲染
+    useEffect(() => {
+        if (!isStreaming && content.trim()) {
+            console.log('MessageContent: 流式输出完成，强制重新渲染', { 
+                contentLength: content.length,
+                hasTable: content.includes('|'),
+                renderKey: renderKey + 1
+            });
+            setRenderKey(prev => prev + 1);
+        }
+    }, [isStreaming, content]);
+
     if (isUser) {
         return (
             <div className="text-sm whitespace-pre-wrap leading-relaxed">
@@ -37,10 +52,29 @@ const MessageContent = ({ content, isUser = false, isStreaming = false }) => {
         );
     }
 
-    // AI消息使用简化的markdown渲染
+    // 流式输出过程中使用纯文本显示，避免解析不完整的markdown
+    if (isStreaming) {
+        return (
+            <div className="text-sm leading-relaxed">
+                <div className="whitespace-pre-wrap font-mono">
+                    {content}
+                </div>
+                <span className="inline-block w-2 h-4 bg-current ml-1 animate-pulse" />
+            </div>
+        );
+    }
+
+    // 流式输出完成后使用ReactMarkdown渲染
+    console.log('MessageContent: 使用ReactMarkdown渲染', { 
+        renderKey, 
+        contentLength: content.length,
+        hasTable: content.includes('|')
+    });
+    
     return (
-        <div className="text-sm leading-relaxed">
+        <div key={renderKey} className="text-sm leading-relaxed">
             <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
                 components={{
                     code({ node, inline, className, children, ...props }) {
                         const match = /language-(\w+)/.exec(className || '');
@@ -91,24 +125,46 @@ const MessageContent = ({ content, isUser = false, isStreaming = false }) => {
                         );
                     },
                     table({ children }) {
+                        console.log('ReactMarkdown: 渲染表格组件');
                         return (
                             <div className="overflow-x-auto my-4">
-                                <table className="min-w-full border-collapse border border-border">
+                                <table className="min-w-full border-collapse border border-border rounded-lg">
                                     {children}
                                 </table>
                             </div>
                         );
                     },
+                    thead({ children }) {
+                        return (
+                            <thead className="bg-muted/50">
+                                {children}
+                            </thead>
+                        );
+                    },
+                    tbody({ children }) {
+                        return (
+                            <tbody className="divide-y divide-border">
+                                {children}
+                            </tbody>
+                        );
+                    },
+                    tr({ children }) {
+                        return (
+                            <tr className="hover:bg-muted/30 transition-colors">
+                                {children}
+                            </tr>
+                        );
+                    },
                     th({ children }) {
                         return (
-                            <th className="border border-border px-4 py-2 bg-muted font-semibold text-left">
+                            <th className="border border-border px-4 py-3 bg-muted font-semibold text-left text-sm">
                                 {children}
                             </th>
                         );
                     },
                     td({ children }) {
                         return (
-                            <td className="border border-border px-4 py-2">
+                            <td className="border border-border px-4 py-3 text-sm">
                                 {children}
                             </td>
                         );
@@ -118,9 +174,6 @@ const MessageContent = ({ content, isUser = false, isStreaming = false }) => {
             >
                 {content}
             </ReactMarkdown>
-            {isStreaming && (
-                <span className="inline-block w-2 h-4 bg-current ml-1 animate-pulse" />
-            )}
         </div>
     );
 };
@@ -294,7 +347,21 @@ const ChatPage = () => {
     const loadSessions = async () => {
         try {
             const result = await GetChatSessions();
-            setSessions(result.sessions || []);
+            const sessions = result.sessions || [];
+            setSessions(sessions);
+            
+            // 自动选择最近的会话（如果存在且当前没有选中会话）
+            if (sessions.length > 0 && !currentSession) {
+                // 按last_active_at排序，选择最近的会话
+                const mostRecentSession = sessions.reduce((latest, session) => {
+                    const latestTime = new Date(latest.last_active_at || latest.updated_at);
+                    const sessionTime = new Date(session.last_active_at || session.updated_at);
+                    return sessionTime > latestTime ? session : latest;
+                });
+                
+                console.log('自动选择最近的会话:', mostRecentSession.title);
+                setCurrentSession(mostRecentSession);
+            }
         } catch (error) {
             console.error('Failed to load sessions:', error);
             toast.error('加载会话失败');
@@ -303,13 +370,27 @@ const ChatPage = () => {
 
     // 加载消息历史
     const loadMessages = async (sessionId) => {
+        if (!sessionId) {
+            console.warn('尝试加载消息但sessionId为空');
+            setMessages([]);
+            return;
+        }
+
         try {
             const result = await GetChatMessages(sessionId, 100, 0);
-            setMessages(result.messages || []);
-            scrollToBottom();
+            const messages = result.messages || [];
+            console.log(`加载会话 ${sessionId} 的消息，共 ${messages.length} 条`);
+            setMessages(messages);
+            
+            // 延迟滚动，确保DOM已更新
+            setTimeout(() => {
+                scrollToBottom();
+            }, 100);
         } catch (error) {
             console.error('Failed to load messages:', error);
             toast.error('加载消息失败');
+            // 出错时也要清空消息列表，避免显示错误的消息
+            setMessages([]);
         }
     };
 
@@ -322,6 +403,7 @@ const ChatPage = () => {
             setCurrentSession(session);
             setMessages([]);
             setIsSessionDropdownOpen(false);
+            console.log('手动创建新会话:', session.title);
             toast.success('创建新会话');
         } catch (error) {
             console.error('Failed to create session:', error);
@@ -345,11 +427,28 @@ const ChatPage = () => {
         
         try {
             await DeleteChatSession(sessionId);
-            setSessions(prev => prev.filter(s => s.id !== sessionId));
+            const updatedSessions = sessions.filter(s => s.id !== sessionId);
+            setSessions(updatedSessions);
+            
+            // 如果删除的是当前会话，需要选择新的会话
             if (currentSession?.id === sessionId) {
-                setCurrentSession(null);
-                setMessages([]);
+                if (updatedSessions.length > 0) {
+                    // 选择最近的会话
+                    const mostRecentSession = updatedSessions.reduce((latest, session) => {
+                        const latestTime = new Date(latest.last_active_at || latest.updated_at);
+                        const sessionTime = new Date(session.last_active_at || session.updated_at);
+                        return sessionTime > latestTime ? session : latest;
+                    });
+                    console.log('删除当前会话后，自动选择最近的会话:', mostRecentSession.title);
+                    setCurrentSession(mostRecentSession);
+                } else {
+                    // 没有会话了，清空状态
+                    console.log('删除最后一个会话，返回欢迎界面');
+                    setCurrentSession(null);
+                    setMessages([]);
+                }
             }
+            
             toast.success('删除会话成功');
         } catch (error) {
             console.error('Failed to delete session:', error);
@@ -392,20 +491,44 @@ const ChatPage = () => {
 
     // 选择会话
     const selectSession = (session) => {
+        if (session.id === currentSession?.id) {
+            console.log('选择的会话已经是当前会话，跳过加载');
+            setIsSessionDropdownOpen(false);
+            return;
+        }
+        
+        console.log('切换到会话:', session.title);
         setCurrentSession(session);
         setIsSessionDropdownOpen(false);
+        
+        // 显示加载提示
+        toast.success(`切换到: ${session.title}`);
     };
 
     // 发送消息
     const sendMessage = async () => {
         if (!inputMessage.trim() || isLoading) return;
 
-        if (!currentSession) {
-            await createSession();
-            return;
+        const userMessage = inputMessage.trim();
+
+        // 如果没有当前会话，先创建一个
+        let sessionToUse = currentSession;
+        if (!sessionToUse) {
+            try {
+                console.log('没有当前会话，创建新会话...');
+                const title = `新对话 ${new Date().toLocaleString()}`;
+                sessionToUse = await CreateChatSession(title);
+                setSessions(prev => [sessionToUse, ...prev]);
+                setCurrentSession(sessionToUse);
+                setMessages([]);
+                console.log('新会话创建成功:', sessionToUse.title);
+            } catch (error) {
+                console.error('Failed to create session:', error);
+                toast.error('创建会话失败');
+                return;
+            }
         }
 
-        const userMessage = inputMessage.trim();
         setInputMessage('');
         setIsLoading(true);
         setIsStreaming(true);
@@ -429,6 +552,29 @@ const ChatPage = () => {
         };
         setMessages(prev => [...prev, aiMsg]);
 
+        // 降级到普通API
+        const fallbackToNormalAPI = async () => {
+            try {
+                const response = await SendChatMessage(sessionToUse.id, userMessage);
+                setMessages(prev => prev.map(msg => 
+                    msg.id === aiMsg.id 
+                        ? { ...msg, content: response.content, isStreaming: false }
+                        : msg
+                ));
+            } catch (error) {
+                console.error('Failed to send message:', error);
+                setMessages(prev => prev.map(msg => 
+                    msg.id === aiMsg.id 
+                        ? { ...msg, content: '抱歉，发送消息失败。', isStreaming: false }
+                        : msg
+                ));
+                toast.error('发送消息失败');
+            } finally {
+                setIsLoading(false);
+                setIsStreaming(false);
+            }
+        };
+
         try {
             // 尝试使用流式API
             const processStream = async () => {
@@ -438,7 +584,7 @@ const ChatPage = () => {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        sessionId: currentSession.id,
+                        sessionId: sessionToUse.id,
                         message: userMessage
                     }),
                 });
@@ -450,6 +596,7 @@ const ChatPage = () => {
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
+                let currentEvent = '';
 
                 while (true) {
                     const { done, value } = await reader.read();
@@ -460,20 +607,22 @@ const ChatPage = () => {
                     buffer = lines.pop() || '';
 
                     for (const line of lines) {
-                        if (line.trim() === '') continue;
-                        if (line.startsWith('data: ')) {
+                        if (line.trim() === '') {
+                            // 空行表示事件结束，处理当前事件
+                            continue;
+                        }
+                        
+                        if (line.startsWith('event: ')) {
+                            currentEvent = line.slice(7).trim();
+                        } else if (line.startsWith('data: ')) {
                             const data = line.slice(6);
                             if (data === '[DONE]') {
                                 setIsStreaming(false);
                                 setIsLoading(false);
                                 return;
                             }
-                            try {
-                                const event = JSON.parse(data);
-                                handleSSEEvent(event.type, event.data);
-                            } catch (e) {
-                                console.error('Error parsing SSE data:', e);
-                            }
+                            // 直接处理事件和数据
+                            handleSSEEvent(currentEvent, data);
                         }
                     }
                 }
@@ -499,6 +648,7 @@ const ChatPage = () => {
                         setIsLoading(false);
                         break;
                     case 'done':
+                        // 流式输出完成后，切换到ReactMarkdown渲染
                         setMessages(prev => prev.map(msg => 
                             msg.id === aiMsg.id 
                                 ? { ...msg, isStreaming: false }
@@ -514,29 +664,6 @@ const ChatPage = () => {
         } catch (error) {
             console.error('Streaming failed, falling back to normal API:', error);
             await fallbackToNormalAPI();
-        }
-    };
-
-    // 降级到普通API
-    const fallbackToNormalAPI = async () => {
-        try {
-            const response = await SendChatMessage(currentSession.id, inputMessage);
-            setMessages(prev => prev.map(msg => 
-                msg.id === aiMsg.id 
-                    ? { ...msg, content: response.content, isStreaming: false }
-                    : msg
-            ));
-        } catch (error) {
-            console.error('Failed to send message:', error);
-            setMessages(prev => prev.map(msg => 
-                msg.id === aiMsg.id 
-                    ? { ...msg, content: '抱歉，发送消息失败。', isStreaming: false }
-                    : msg
-            ));
-            toast.error('发送消息失败');
-        } finally {
-            setIsLoading(false);
-            setIsStreaming(false);
         }
     };
 
@@ -700,37 +827,6 @@ const ChatPage = () => {
                                 </div>
                             )}
                         </div>
-
-                        {/* 输入区域 */}
-                        <div className="flex-shrink-0 p-3 border-t border-border bg-background/95 backdrop-blur-sm">
-                            <div className="flex gap-2">
-                                <div className="flex-1 relative">
-                                    <Input
-                                        value={inputMessage}
-                                        onChange={(e) => setInputMessage(e.target.value)}
-                                        onKeyPress={handleKeyPress}
-                                        placeholder="输入您的问题..."
-                                        disabled={isLoading}
-                                        className="pr-12 text-sm"
-                                    />
-                                    <Button
-                                        onClick={sendMessage}
-                                        disabled={!inputMessage.trim() || isLoading}
-                                        size="sm"
-                                        className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                                    >
-                                        <Send className="w-3.5 h-3.5" />
-                                    </Button>
-                                </div>
-                            </div>
-                            
-                            {isLoading && (
-                                <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-                                    AI正在思考中...
-                                </div>
-                            )}
-                        </div>
                     </>
                 ) : (
                     <div className="h-full flex items-center justify-center">
@@ -740,15 +836,47 @@ const ChatPage = () => {
                             </div>
                             <h3 className="text-xl font-semibold mb-2">欢迎使用AI助手</h3>
                             <p className="text-muted-foreground mb-6">
-                                创建新对话或从历史记录中选择一个会话开始聊天
+                                您可以直接在下方输入框中输入问题开始对话，<br />
+                                或者点击按钮手动创建新会话
                             </p>
                             <Button onClick={createSession} className="w-full">
                                 <Plus className="w-4 h-4 mr-2" />
-                                开始新对话
+                                手动创建新对话
                             </Button>
                         </div>
                     </div>
                 )}
+
+                {/* 输入区域 - 始终显示 */}
+                <div className="flex-shrink-0 p-3 border-t border-border bg-background/95 backdrop-blur-sm">
+                    <div className="flex gap-2">
+                        <div className="flex-1 relative">
+                            <Input
+                                value={inputMessage}
+                                onChange={(e) => setInputMessage(e.target.value)}
+                                onKeyPress={handleKeyPress}
+                                placeholder={currentSession ? "输入您的问题..." : "输入问题开始新对话..."}
+                                disabled={isLoading}
+                                className="pr-12 text-sm"
+                            />
+                            <Button
+                                onClick={sendMessage}
+                                disabled={!inputMessage.trim() || isLoading}
+                                size="sm"
+                                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                            >
+                                <Send className="w-3.5 h-3.5" />
+                            </Button>
+                        </div>
+                    </div>
+                    
+                    {isLoading && (
+                        <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+                            AI正在思考中...
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* 删除会话确认对话框 */}

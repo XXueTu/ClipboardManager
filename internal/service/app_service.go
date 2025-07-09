@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -175,12 +176,22 @@ func (s *appService) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 获取请求参数
-	sessionID := r.URL.Query().Get("session_id")
-	message := r.URL.Query().Get("message")
+	// 从JSON body中解析请求参数
+	var requestBody struct {
+		SessionId string `json:"sessionId"`
+		Message   string `json:"message"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+		s.writeSSEError(w, "Invalid request body")
+		return
+	}
+
+	sessionID := requestBody.SessionId
+	message := requestBody.Message
 
 	if sessionID == "" || message == "" {
-		s.writeSSEError(w, "Missing session_id or message parameter")
+		s.writeSSEError(w, "Missing sessionId or message parameter")
 		return
 	}
 
@@ -199,15 +210,20 @@ func (s *appService) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	err := s.chatService.SendMessageStream(r.Context(), sessionID, message, func(response *models.StreamResponse) {
 		switch response.Type {
 		case models.StreamTypeMessage:
-			// 序列化响应数据
-			dataBytes, _ := json.Marshal(response.Data)
-			s.writeSSEEvent(w, "message", fmt.Sprintf(`{"data": %s}`, string(dataBytes)))
+			// 发送简单的content内容
+			if chatResp, ok := response.Data.(models.ChatResponse); ok {
+				log.Printf("📤 发送SSE message事件: content='%s'", chatResp.Content)
+				s.writeSSEEvent(w, "message", chatResp.Content)
+			}
 		case models.StreamTypeComplete:
-			// 序列化响应数据
-			dataBytes, _ := json.Marshal(response.Data)
-			s.writeSSEEvent(w, "complete", fmt.Sprintf(`{"data": %s}`, string(dataBytes)))
+			// 前端期望的是done事件
+			if chatResp, ok := response.Data.(models.ChatResponse); ok {
+				log.Printf("📤 发送SSE done事件: content='%s'", chatResp.Content)
+				s.writeSSEEvent(w, "done", chatResp.Content)
+			}
 		case models.StreamTypeError:
-			s.writeSSEEvent(w, "error", fmt.Sprintf(`{"error": "%s"}`, response.Error))
+			log.Printf("📤 发送SSE error事件: error='%s'", response.Error)
+			s.writeSSEEvent(w, "error", response.Error)
 		}
 		flusher.Flush()
 	})
@@ -224,6 +240,7 @@ func (s *appService) handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 // writeSSEEvent 写入SSE事件
 func (s *appService) writeSSEEvent(w http.ResponseWriter, event string, data string) {
+	log.Printf("🔄 写入SSE事件 - event: '%s', data: '%s'", event, data)
 	fmt.Fprintf(w, "event: %s\n", event)
 	fmt.Fprintf(w, "data: %s\n\n", data)
 }

@@ -108,6 +108,8 @@ func (s *chatService) UpdateSession(ctx context.Context, sessionID string, title
 
 // SendMessage 发送消息（非流式）
 func (s *chatService) SendMessage(ctx context.Context, sessionID, message string) (*models.ChatMessage, error) {
+	log.Printf("🔄 开始处理消息: sessionID=%s, message=%s", sessionID, message)
+
 	// 保存用户消息
 	userMessage := &models.ChatMessage{
 		ID:          uuid.New().String(),
@@ -122,28 +124,39 @@ func (s *chatService) SendMessage(ctx context.Context, sessionID, message string
 	}
 
 	if err := s.repo.CreateChatMessage(userMessage); err != nil {
+		log.Printf("❌ 保存用户消息失败: %v", err)
 		return nil, fmt.Errorf("failed to save user message: %w", err)
 	}
+	log.Printf("✅ 用户消息已保存: %s", userMessage.ID)
 
 	// 获取历史消息
 	historyResp, err := s.GetMessages(ctx, sessionID, 20, 0)
 	if err != nil {
+		log.Printf("❌ 获取历史消息失败: %v", err)
 		return nil, fmt.Errorf("failed to get message history: %w", err)
 	}
+	log.Printf("✅ 获取历史消息成功，共%d条消息", len(historyResp.Messages))
 
 	// 转换为聊天模型所需的格式
 	messages := s.convertToSchemaMessages(historyResp.Messages)
+	log.Printf("✅ 消息格式转换完成，共%d条消息", len(messages))
 
 	// 调用聊天模型
+	log.Printf("🤖 正在创建聊天模型...")
 	chatModel, err := model.NewChatModel(ctx)
 	if err != nil {
+		log.Printf("❌ 创建聊天模型失败: %v", err)
 		return nil, fmt.Errorf("failed to create chat model: %w", err)
 	}
+	log.Printf("✅ 聊天模型创建成功")
 
+	log.Printf("🤖 正在生成回复...")
 	response, err := chatModel.Generate(ctx, messages)
 	if err != nil {
+		log.Printf("❌ 生成回复失败: %v", err)
 		return nil, fmt.Errorf("failed to generate response: %w", err)
 	}
+	log.Printf("✅ 回复生成成功，长度: %d", len(response.Content))
 
 	// 保存AI响应
 	aiMessage := &models.ChatMessage{
@@ -159,19 +172,24 @@ func (s *chatService) SendMessage(ctx context.Context, sessionID, message string
 	}
 
 	if err := s.repo.CreateChatMessage(aiMessage); err != nil {
+		log.Printf("❌ 保存AI消息失败: %v", err)
 		return nil, fmt.Errorf("failed to save AI message: %w", err)
 	}
+	log.Printf("✅ AI消息已保存: %s", aiMessage.ID)
 
 	// 更新会话信息
 	if err := s.updateSessionAfterMessage(sessionID, response.Content); err != nil {
-		log.Printf("failed to update session: %v", err)
+		log.Printf("⚠️ 更新会话信息失败: %v", err)
 	}
 
+	log.Printf("🎉 消息处理完成: %s", aiMessage.ID)
 	return aiMessage, nil
 }
 
 // SendMessageStream 发送消息（流式）
 func (s *chatService) SendMessageStream(ctx context.Context, sessionID, message string, callback func(*models.StreamResponse)) error {
+	log.Printf("🔄 开始流式处理消息: sessionID=%s, message=%s", sessionID, message)
+
 	// 保存用户消息
 	userMessage := &models.ChatMessage{
 		ID:          uuid.New().String(),
@@ -186,35 +204,43 @@ func (s *chatService) SendMessageStream(ctx context.Context, sessionID, message 
 	}
 
 	if err := s.repo.CreateChatMessage(userMessage); err != nil {
+		log.Printf("❌ 保存用户消息失败: %v", err)
 		callback(&models.StreamResponse{
 			Type:  models.StreamTypeError,
 			Error: fmt.Sprintf("failed to save user message: %v", err),
 		})
 		return err
 	}
+	log.Printf("✅ 用户消息已保存: %s", userMessage.ID)
 
 	// 获取历史消息
 	historyResp, err := s.GetMessages(ctx, sessionID, 20, 0)
 	if err != nil {
+		log.Printf("❌ 获取历史消息失败: %v", err)
 		callback(&models.StreamResponse{
 			Type:  models.StreamTypeError,
 			Error: fmt.Sprintf("failed to get message history: %v", err),
 		})
 		return err
 	}
+	log.Printf("✅ 获取历史消息成功，共%d条消息", len(historyResp.Messages))
 
 	// 转换为聊天模型所需的格式
 	messages := s.convertToSchemaMessages(historyResp.Messages)
+	log.Printf("✅ 消息格式转换完成，共%d条消息", len(messages))
 
 	// 创建聊天模型
+	log.Printf("🤖 正在创建聊天模型...")
 	chatModel, err := model.NewChatModel(ctx)
 	if err != nil {
+		log.Printf("❌ 创建聊天模型失败: %v", err)
 		callback(&models.StreamResponse{
 			Type:  models.StreamTypeError,
 			Error: fmt.Sprintf("failed to create chat model: %v", err),
 		})
 		return err
 	}
+	log.Printf("✅ 聊天模型创建成功")
 
 	// 创建AI消息记录
 	aiMessageID := uuid.New().String()
@@ -231,33 +257,40 @@ func (s *chatService) SendMessageStream(ctx context.Context, sessionID, message 
 	}
 
 	if err := s.repo.CreateChatMessage(aiMessage); err != nil {
+		log.Printf("❌ 创建AI消息失败: %v", err)
 		callback(&models.StreamResponse{
 			Type:  models.StreamTypeError,
 			Error: fmt.Sprintf("failed to create AI message: %v", err),
 		})
 		return err
 	}
+	log.Printf("✅ AI消息记录已创建: %s", aiMessageID)
 
 	// 开始流式生成
+	log.Printf("🤖 开始流式生成...")
 	stream, err := chatModel.Stream(ctx, messages)
 	if err != nil {
+		log.Printf("❌ 开始流式生成失败: %v", err)
 		callback(&models.StreamResponse{
 			Type:  models.StreamTypeError,
 			Error: fmt.Sprintf("failed to start stream: %v", err),
 		})
 		return err
 	}
+	log.Printf("✅ 流式生成已开始")
 
 	defer stream.Close()
 
 	var fullContent string
+	messageCount := 0
 	for {
 		msg, err := stream.Recv()
 		if err == io.EOF {
-			// 流结束
+			log.Printf("✅ 流式生成完成，共处理%d条消息", messageCount)
 			break
 		}
 		if err != nil {
+			log.Printf("❌ 流式生成错误: %v", err)
 			callback(&models.StreamResponse{
 				Type:      models.StreamTypeError,
 				Error:     fmt.Sprintf("stream error: %v", err),
@@ -266,8 +299,13 @@ func (s *chatService) SendMessageStream(ctx context.Context, sessionID, message 
 			return err
 		}
 
+		messageCount++
 		// 累积内容
 		fullContent += msg.Content
+
+		if messageCount%10 == 0 {
+			log.Printf("🔄 已处理%d条消息，当前内容长度: %d", messageCount, len(fullContent))
+		}
 
 		// 发送流式响应
 		callback(&models.StreamResponse{
@@ -284,6 +322,8 @@ func (s *chatService) SendMessageStream(ctx context.Context, sessionID, message 
 		})
 	}
 
+	log.Printf("✅ 流式内容生成完成，总长度: %d", len(fullContent))
+
 	// 更新完成的消息
 	aiMessage.Content = fullContent
 	aiMessage.IsStreaming = false
@@ -291,7 +331,9 @@ func (s *chatService) SendMessageStream(ctx context.Context, sessionID, message 
 	aiMessage.UpdatedAt = time.Now()
 
 	if err := s.repo.UpdateChatMessage(aiMessage); err != nil {
-		log.Printf("failed to update AI message: %v", err)
+		log.Printf("❌ 更新AI消息失败: %v", err)
+	} else {
+		log.Printf("✅ AI消息已更新: %s", aiMessageID)
 	}
 
 	// 发送完成信号
@@ -310,9 +352,10 @@ func (s *chatService) SendMessageStream(ctx context.Context, sessionID, message 
 
 	// 更新会话信息
 	if err := s.updateSessionAfterMessage(sessionID, fullContent); err != nil {
-		log.Printf("failed to update session: %v", err)
+		log.Printf("⚠️ 更新会话信息失败: %v", err)
 	}
 
+	log.Printf("🎉 流式消息处理完成: %s", aiMessageID)
 	return nil
 }
 

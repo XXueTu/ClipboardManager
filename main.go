@@ -31,10 +31,10 @@ func main() {
 	// 根据模式配置AssetServer
 	var assetServerOptions *assetserver.Options
 	if isDev {
-		// 开发模式：不使用自定义Handler，让Wails处理代理
+		// 开发模式：使用自定义Handler支持流式API
 		assetServerOptions = &assetserver.Options{
-			Assets: assets,
-			// 开发模式下不使用自定义Handler
+			Assets:  assets,
+			Handler: app.appService.CreateAssetHandler(),
 		}
 	} else {
 		// 生产模式：使用自定义Handler

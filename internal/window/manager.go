@@ -262,7 +262,7 @@ func (m *manager) easeInQuart(t float64) float64 {
 func (m *manager) GetState() models.WindowState {
 	message := ""
 	if m.settings != nil {
-		message = fmt.Sprintf("按 %v 切换侧边栏 | 按 %v 隐藏", m.settings.MainHotkey, m.settings.EscapeHotkey)
+		// message = fmt.Sprintf("按 %v 切换侧边栏 | 按 %v 隐藏", m.settings.MainHotkey, m.settings.EscapeHotkey)
 	}
 
 	position := "left"
