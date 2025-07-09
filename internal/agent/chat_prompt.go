@@ -8,6 +8,28 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
+func ChatPromptBase(ctx context.Context, input string, history []*schema.Message) ([]*schema.Message, error) {
+
+	var inputMsg = []*schema.Message{
+		{Role: "user", Content: input},
+	}
+
+	chatTpl := prompt.FromMessages(schema.FString,
+		schema.MessagesPlaceholder("message_histories", true),
+		schema.UserMessage("{user_input}"),
+	)
+
+	msgList, err := chatTpl.Format(ctx, map[string]any{
+		"user_input":        inputMsg,
+		"message_histories": history,
+	})
+	if err != nil {
+		log.Printf("Format failed, err=%v", err)
+		return nil, err
+	}
+	return msgList, nil
+}
+
 func ChatPromptSummarize(ctx context.Context, input []*schema.Message, history []*schema.Message) ([]*schema.Message, error) {
 
 	systemTpl := `你是一个专业的内容分析助手，你的任务是根据用户的输入和输入的历史消息，生成一段总结,原来精确概括全文内容，不要遗漏任何细节。用户输入：{user_input}`

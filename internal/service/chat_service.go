@@ -190,6 +190,22 @@ func (s *chatService) SendMessage(ctx context.Context, sessionID, message string
 func (s *chatService) SendMessageStream(ctx context.Context, sessionID, message string, callback func(*models.StreamResponse)) error {
 	log.Printf("🔄 开始流式处理消息: sessionID=%s, message=%s", sessionID, message)
 
+	// 获取历史消息
+	historyResp, err := s.GetMessages(ctx, sessionID, 20, 0)
+	if err != nil {
+		log.Printf("❌ 获取历史消息失败: %v", err)
+		callback(&models.StreamResponse{
+			Type:  models.StreamTypeError,
+			Error: fmt.Sprintf("failed to get message history: %v", err),
+		})
+		return err
+	}
+	log.Printf("✅ 获取历史消息成功，共%d条消息", len(historyResp.Messages))
+
+	// 转换为聊天模型所需的格式
+	messages := s.convertToSchemaMessages(historyResp.Messages)
+	log.Printf("✅ 消息格式转换完成，共%d条消息", len(messages))
+
 	// 保存用户消息
 	userMessage := &models.ChatMessage{
 		ID:          uuid.New().String(),
@@ -213,21 +229,15 @@ func (s *chatService) SendMessageStream(ctx context.Context, sessionID, message 
 	}
 	log.Printf("✅ 用户消息已保存: %s", userMessage.ID)
 
-	// 获取历史消息
-	historyResp, err := s.GetMessages(ctx, sessionID, 20, 0)
+	msg, err := model.ChatPromptBase(ctx, message, messages)
 	if err != nil {
-		log.Printf("❌ 获取历史消息失败: %v", err)
+		log.Printf("❌ 生成提示词失败: %v", err)
 		callback(&models.StreamResponse{
 			Type:  models.StreamTypeError,
-			Error: fmt.Sprintf("failed to get message history: %v", err),
+			Error: fmt.Sprintf("failed to generate response: %v", err),
 		})
 		return err
 	}
-	log.Printf("✅ 获取历史消息成功，共%d条消息", len(historyResp.Messages))
-
-	// 转换为聊天模型所需的格式
-	messages := s.convertToSchemaMessages(historyResp.Messages)
-	log.Printf("✅ 消息格式转换完成，共%d条消息", len(messages))
 
 	// 创建聊天模型
 	log.Printf("🤖 正在创建聊天模型...")
@@ -268,7 +278,7 @@ func (s *chatService) SendMessageStream(ctx context.Context, sessionID, message 
 
 	// 开始流式生成
 	log.Printf("🤖 开始流式生成...")
-	stream, err := chatModel.Stream(ctx, messages)
+	stream, err := chatModel.Stream(ctx, msg)
 	if err != nil {
 		log.Printf("❌ 开始流式生成失败: %v", err)
 		callback(&models.StreamResponse{

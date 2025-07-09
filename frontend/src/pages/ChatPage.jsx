@@ -11,10 +11,6 @@ import {
     User
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import remarkGfm from 'remark-gfm';
 import {
     CreateChatSession,
     DeleteChatSession,
@@ -23,6 +19,7 @@ import {
     SendChatMessage,
     UpdateChatSession
 } from '../../wailsjs/go/main/App';
+import { StreamingMarkdown } from '../components';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -30,19 +27,13 @@ import { useToast } from '../components/ui/toast';
 
 // Markdown渲染组件
 const MessageContent = ({ content, isUser = false, isStreaming = false }) => {
-    const [renderKey, setRenderKey] = useState(0);
-    
-    // 监听isStreaming变化，当从true变为false时强制重新渲染
-    useEffect(() => {
-        if (!isStreaming && content.trim()) {
-            console.log('MessageContent: 流式输出完成，强制重新渲染', { 
-                contentLength: content.length,
-                hasTable: content.includes('|'),
-                renderKey: renderKey + 1
-            });
-            setRenderKey(prev => prev + 1);
-        }
-    }, [isStreaming, content]);
+    // 添加调试日志
+    console.log('MessageContent 渲染:', {
+        isUser,
+        isStreaming,
+        contentLength: content.length,
+        hasTable: content.includes('|')
+    });
 
     if (isUser) {
         return (
@@ -52,129 +43,12 @@ const MessageContent = ({ content, isUser = false, isStreaming = false }) => {
         );
     }
 
-    // 流式输出过程中使用纯文本显示，避免解析不完整的markdown
-    if (isStreaming) {
-        return (
-            <div className="text-sm leading-relaxed">
-                <div className="whitespace-pre-wrap font-mono">
-                    {content}
-                </div>
-                <span className="inline-block w-2 h-4 bg-current ml-1 animate-pulse" />
-            </div>
-        );
-    }
-
-    // 流式输出完成后使用ReactMarkdown渲染
-    console.log('MessageContent: 使用ReactMarkdown渲染', { 
-        renderKey, 
-        contentLength: content.length,
-        hasTable: content.includes('|')
-    });
-    
+    // 使用StreamingMarkdown组件
     return (
-        <div key={renderKey} className="text-sm leading-relaxed">
-            <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                    code({ node, inline, className, children, ...props }) {
-                        const match = /language-(\w+)/.exec(className || '');
-                        return !inline && match ? (
-                            <div className="relative my-4">
-                                <div className="flex items-center justify-between bg-gray-800 text-gray-200 px-4 py-2 rounded-t-lg text-sm">
-                                    <span>{match[1]}</span>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 w-6 p-0 text-gray-400 hover:text-white"
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(String(children).replace(/\n$/, ''));
-                                        }}
-                                    >
-                                        <Copy className="w-3 h-3" />
-                                    </Button>
-                                </div>
-                                <SyntaxHighlighter
-                                    style={oneDark}
-                                    language={match[1]}
-                                    PreTag="div"
-                                    className="!mt-0 !rounded-t-none"
-                                    {...props}
-                                >
-                                    {String(children).replace(/\n$/, '')}
-                                </SyntaxHighlighter>
-                            </div>
-                        ) : (
-                            <code 
-                                className={`${isUser ? 'bg-primary-foreground/20' : 'bg-muted'} px-1.5 py-0.5 rounded text-sm font-mono`} 
-                                {...props}
-                            >
-                                {children}
-                            </code>
-                        );
-                    },
-                    pre({ children }) {
-                        return <div className="overflow-x-auto">{children}</div>;
-                    },
-                    blockquote({ children }) {
-                        return (
-                            <blockquote className={`border-l-4 pl-4 py-2 my-4 italic ${
-                                isUser ? 'border-primary-foreground/30' : 'border-muted-foreground/30'
-                            }`}>
-                                {children}
-                            </blockquote>
-                        );
-                    },
-                    table({ children }) {
-                        console.log('ReactMarkdown: 渲染表格组件');
-                        return (
-                            <div className="overflow-x-auto my-4">
-                                <table className="min-w-full border-collapse border border-border rounded-lg">
-                                    {children}
-                                </table>
-                            </div>
-                        );
-                    },
-                    thead({ children }) {
-                        return (
-                            <thead className="bg-muted/50">
-                                {children}
-                            </thead>
-                        );
-                    },
-                    tbody({ children }) {
-                        return (
-                            <tbody className="divide-y divide-border">
-                                {children}
-                            </tbody>
-                        );
-                    },
-                    tr({ children }) {
-                        return (
-                            <tr className="hover:bg-muted/30 transition-colors">
-                                {children}
-                            </tr>
-                        );
-                    },
-                    th({ children }) {
-                        return (
-                            <th className="border border-border px-4 py-3 bg-muted font-semibold text-left text-sm">
-                                {children}
-                            </th>
-                        );
-                    },
-                    td({ children }) {
-                        return (
-                            <td className="border border-border px-4 py-3 text-sm">
-                                {children}
-                            </td>
-                        );
-                    }
-                }}
-                className="prose prose-sm max-w-none dark:prose-invert"
-            >
-                {content}
-            </ReactMarkdown>
-        </div>
+        <StreamingMarkdown 
+            content={content} 
+            isStreaming={isStreaming}
+        />
     );
 };
 
@@ -342,6 +216,22 @@ const ChatPage = () => {
         sessionTitle: ''
     });
     const messagesEndRef = useRef(null);
+
+    // 监听messages变化
+    useEffect(() => {
+        console.log('Messages状态变化:', messages.map(msg => ({
+            id: msg.id,
+            role: msg.role,
+            contentLength: msg.content.length,
+            isStreaming: msg.isStreaming,
+            hasTable: msg.content.includes('|')
+        })));
+    }, [messages]);
+
+    // 监听isStreaming变化
+    useEffect(() => {
+        console.log('ChatPage isStreaming状态变化:', isStreaming);
+    }, [isStreaming]);
 
     // 加载会话列表
     const loadSessions = async () => {
@@ -533,6 +423,8 @@ const ChatPage = () => {
         setIsLoading(true);
         setIsStreaming(true);
 
+        console.log('开始发送消息:', userMessage);
+
         // 添加用户消息
         const userMsg = {
             id: Date.now(),
@@ -550,17 +442,21 @@ const ChatPage = () => {
             created_at: new Date().toISOString(),
             isStreaming: true
         };
+        console.log('创建AI消息占位符:', aiMsg);
         setMessages(prev => [...prev, aiMsg]);
 
         // 降级到普通API
         const fallbackToNormalAPI = async () => {
+            console.log('执行fallback API');
             try {
                 const response = await SendChatMessage(sessionToUse.id, userMessage);
+                console.log('Fallback API响应:', response);
                 setMessages(prev => prev.map(msg => 
                     msg.id === aiMsg.id 
                         ? { ...msg, content: response.content, isStreaming: false }
                         : msg
                 ));
+                console.log('Fallback API完成，设置isStreaming=false');
             } catch (error) {
                 console.error('Failed to send message:', error);
                 setMessages(prev => prev.map(msg => 
@@ -578,6 +474,7 @@ const ChatPage = () => {
         try {
             // 尝试使用流式API
             const processStream = async () => {
+                console.log('尝试使用流式API');
                 const response = await fetch('/api/chat/stream', {
                     method: 'POST',
                     headers: {
@@ -598,9 +495,14 @@ const ChatPage = () => {
                 let buffer = '';
                 let currentEvent = '';
 
+                console.log('开始读取流式响应');
+
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) break;
+                    if (done) {
+                        console.log('流式响应读取完成');
+                        break;
+                    }
 
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n');
@@ -617,6 +519,7 @@ const ChatPage = () => {
                         } else if (line.startsWith('data: ')) {
                             const data = line.slice(6);
                             if (data === '[DONE]') {
+                                console.log('收到[DONE]信号');
                                 setIsStreaming(false);
                                 setIsLoading(false);
                                 return;
@@ -629,6 +532,7 @@ const ChatPage = () => {
             };
 
             const handleSSEEvent = (eventType, data) => {
+                console.log('处理SSE事件:', { eventType, data });
                 switch (eventType) {
                     case 'message':
                         setMessages(prev => prev.map(msg => 
@@ -649,6 +553,7 @@ const ChatPage = () => {
                         break;
                     case 'done':
                         // 流式输出完成后，切换到ReactMarkdown渲染
+                        console.log('流式输出完成，设置isStreaming=false');
                         setMessages(prev => prev.map(msg => 
                             msg.id === aiMsg.id 
                                 ? { ...msg, isStreaming: false }
