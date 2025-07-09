@@ -18,6 +18,7 @@ import {
     RestoreClipboardItem,
     SearchClipboardItems,
     UpdateClipboardItem,
+    UpdateItemTags,
     UpdateSettings,
     UseClipboardItem
 } from "../wailsjs/go/main/App";
@@ -255,11 +256,12 @@ function AppContent() {
         }
     };
 
-    const handleEditItem = async (id, content, category) => {
+    const handleEditItem = async (id, content, category, tags) => {
         try {
             const allItems = [...clipboardItems, ...favoriteItems];
             const item = allItems.find(i => i.id === id);
             if (item) {
+                // 更新基本信息
                 const updatedItem = {
                     ...item,
                     content: content,
@@ -267,10 +269,21 @@ function AppContent() {
                     updated_at: new Date().toISOString()
                 };
                 await UpdateClipboardItem(updatedItem);
+                
+                // 更新标签关联
+                if (tags !== undefined) {
+                    // 将标签对象数组转换为字符串数组
+                    const tagNames = tags.map(tag => 
+                        typeof tag === 'string' ? tag : tag.name || tag
+                    );
+                    await UpdateItemTags(id, tagNames);
+                }
+                
                 loadClipboardItems();
                 loadFavoriteItems();
             }
         } catch (error) {
+            console.error('更新失败:', error);
             toast.error('更新失败');
         }
     };

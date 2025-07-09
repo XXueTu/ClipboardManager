@@ -1,9 +1,14 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/cloudwego/eino/schema"
+
+	model "react-wails-app/internal/agent"
 	"react-wails-app/internal/models"
 	"react-wails-app/internal/repository"
 )
@@ -23,7 +28,7 @@ type TagService interface {
 	SearchTags(query models.TagSearchQuery) ([]models.TagWithStats, error)
 	UpdateTag(tag models.Tag) error
 	DeleteTag(id string) error
-	GetOrCreateTagByName(name string) (*models.Tag, error)
+	GetOrCreateTagByName(name string, source string) (*models.Tag, error)
 
 	// 智能标签处理
 	ProcessClipboardItemTags(item *models.ClipboardItem) ([]string, error)
@@ -34,7 +39,7 @@ type TagService interface {
 	AddTagsToItem(itemID string, tagNames []string) error
 	RemoveTagsFromItem(itemID string, tagNames []string) error
 	GetTagsForItem(itemID string) ([]models.Tag, error)
-	UpdateItemTags(itemID string, tagNames []string) error
+	UpdateItemTags(itemID string, tagNames []string, source string) error
 
 	// 统计和分析
 	GetTagStatistics() (models.TagStatistics, error)
@@ -50,14 +55,14 @@ type TagService interface {
 
 // tagService 标签服务实现
 type tagService struct {
-	tagRepo      repository.TagRepository
+	tagRepo       repository.TagRepository
 	clipboardRepo repository.ClipboardRepository
 }
 
 // NewTagService 创建新的标签服务
 func NewTagService(tagRepo repository.TagRepository, clipboardRepo repository.ClipboardRepository) TagService {
 	return &tagService{
-		tagRepo:      tagRepo,
+		tagRepo:       tagRepo,
 		clipboardRepo: clipboardRepo,
 	}
 }
@@ -74,7 +79,6 @@ func (s *tagService) CreateTagGroup(name, description, color string, sortOrder i
 		Description: description,
 		Color:       color,
 		SortOrder:   sortOrder,
-		IsSystem:    false,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
@@ -106,13 +110,10 @@ func (s *tagService) UpdateTagGroup(group models.TagGroup) error {
 
 // DeleteTagGroup 删除标签分组
 func (s *tagService) DeleteTagGroup(id string) error {
-	// 检查是否为系统分组
-	group, err := s.tagRepo.GetTagGroupByID(id)
+	// 检查分组是否存在
+	_, err := s.tagRepo.GetTagGroupByID(id)
 	if err != nil {
 		return err
-	}
-	if group.IsSystem {
-		return fmt.Errorf("不能删除系统分组")
 	}
 	return s.tagRepo.DeleteTagGroup(id)
 }
@@ -136,7 +137,6 @@ func (s *tagService) CreateTag(name, description, color, groupID string) (*model
 		Color:       color,
 		GroupID:     groupID,
 		UseCount:    0,
-		IsSystem:    false,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 		LastUsedAt:  time.Now(),
@@ -190,13 +190,10 @@ func (s *tagService) UpdateTag(tag models.Tag) error {
 		return err
 	}
 
-	// 检查是否为系统标签
-	existingTag, err := s.tagRepo.GetTagByID(tag.ID)
+	// 检查标签是否存在
+	_, err := s.tagRepo.GetTagByID(tag.ID)
 	if err != nil {
 		return err
-	}
-	if existingTag.IsSystem {
-		return fmt.Errorf("不能修改系统标签")
 	}
 
 	return s.tagRepo.UpdateTag(tag)
@@ -204,24 +201,21 @@ func (s *tagService) UpdateTag(tag models.Tag) error {
 
 // DeleteTag 删除标签
 func (s *tagService) DeleteTag(id string) error {
-	// 检查是否为系统标签
-	tag, err := s.tagRepo.GetTagByID(id)
+	// 检查标签是否存在
+	_, err := s.tagRepo.GetTagByID(id)
 	if err != nil {
 		return err
-	}
-	if tag.IsSystem {
-		return fmt.Errorf("不能删除系统标签")
 	}
 
 	return s.tagRepo.DeleteTag(id)
 }
 
 // GetOrCreateTagByName 根据名称获取或创建标签
-func (s *tagService) GetOrCreateTagByName(name string) (*models.Tag, error) {
+func (s *tagService) GetOrCreateTagByName(name string, source string) (*models.Tag, error) {
 	if err := s.ValidateTagName(name); err != nil {
 		return nil, err
 	}
-	return s.tagRepo.GetOrCreateTag(name)
+	return s.tagRepo.GetOrCreateTag(name, source)
 }
 
 // ProcessClipboardItemTags 处理剪切板条目标签
@@ -234,14 +228,14 @@ func (s *tagService) ProcessClipboardItemTags(item *models.ClipboardItem) ([]str
 
 	// 合并现有标签和自动生成的标签
 	tagMap := make(map[string]bool)
-	
-	// 添加现有标签
+
+	// 添加现有标签（从关联表中获取的标签名称）
 	for _, tag := range item.Tags {
-		if tag != "" {
-			tagMap[tag] = true
+		if tag.Name != "" {
+			tagMap[tag.Name] = true
 		}
 	}
-	
+
 	// 添加自动生成的标签
 	for _, tag := range autoTags {
 		if tag != "" {
@@ -258,70 +252,90 @@ func (s *tagService) ProcessClipboardItemTags(item *models.ClipboardItem) ([]str
 	return tags, nil
 }
 
-// AutoGenerateTags 自动生成标签
+// AutoGenerateTags 自动生成标签 - 使用AI生成
 func (s *tagService) AutoGenerateTags(content, contentType string) ([]string, error) {
-	var tags []string
+	// 使用AI生成标签
+	ctx := context.Background()
+	chatModel, err := model.NewChatModel(ctx)
+	if err != nil {
+		// 如果AI不可用，使用简单的备用逻辑
+		return s.generateFallbackTags(content, contentType), nil
+	}
 
-	// 根据内容类型添加标签
+	input := []*schema.Message{
+		{Role: "user", Content: content},
+	}
+
+	tagsPrompt, err := model.ChatPromptLabel(ctx, input)
+	if err != nil {
+		return s.generateFallbackTags(content, contentType), nil
+	}
+
+	response, err := chatModel.Generate(ctx, tagsPrompt)
+	if err != nil {
+		return s.generateFallbackTags(content, contentType), nil
+	}
+
+	// 解析JSON响应
+	var result struct {
+		Tags []string `json:"tags"`
+	}
+	if err := json.Unmarshal([]byte(response.Content), &result); err != nil {
+		return s.generateFallbackTags(content, contentType), nil
+	}
+
+	// 确保AI生成的标签在数据库中存在
+	var finalTags []string
+	for _, tagName := range result.Tags {
+		if tagName == "" {
+			continue
+		}
+
+		// 获取或创建标签
+		tag, err := s.GetOrCreateTagByName(tagName, "ai-generated")
+		if err != nil {
+			continue // 跳过创建失败的标签
+		}
+
+		finalTags = append(finalTags, tag.Name)
+	}
+
+	return finalTags, nil
+}
+
+// generateFallbackTags 备用标签生成逻辑（简化版）
+func (s *tagService) generateFallbackTags(content, contentType string) []string {
+	// 基于内容类型的基础标签
+	var typeTag string
 	switch contentType {
 	case "url":
-		tags = append(tags, "URL", "网址")
-		// 分析URL类型
-		if contains(content, "github.com") {
-			tags = append(tags, "GitHub", "代码")
-		} else if contains(content, "youtube.com") || contains(content, "youtu.be") {
-			tags = append(tags, "视频", "YouTube")
-		} else if contains(content, "stackoverflow.com") {
-			tags = append(tags, "Stack Overflow", "编程")
-		}
+		typeTag = "链接"
 	case "email":
-		tags = append(tags, "邮箱", "联系方式")
+		typeTag = "邮箱"
 	case "phone":
-		tags = append(tags, "电话", "联系方式")
+		typeTag = "电话"
 	case "file":
-		tags = append(tags, "文件", "路径")
-		// 分析文件类型
-		if contains(content, ".jpg") || contains(content, ".png") || contains(content, ".gif") {
-			tags = append(tags, "图片")
-		} else if contains(content, ".pdf") {
-			tags = append(tags, "PDF")
-		} else if contains(content, ".doc") || contains(content, ".docx") {
-			tags = append(tags, "Word文档")
-		}
+		typeTag = "路径"
 	case "code":
-		tags = append(tags, "代码", "编程")
+		typeTag = "代码"
 	case "json":
-		tags = append(tags, "JSON", "数据")
+		typeTag = "数据"
 	default:
-		tags = append(tags, "文本")
+		typeTag = "文本"
 	}
 
-	// 根据内容长度添加标签
-	contentLen := len(content)
-	if contentLen < 50 {
-		tags = append(tags, "短文本")
-	} else if contentLen < 500 {
-		tags = append(tags, "中等文本")
+	// 基于内容长度的使用意图标签
+	var intentTag string
+	if len(content) < 100 {
+		intentTag = "临时"
 	} else {
-		tags = append(tags, "长文本")
+		intentTag = "保存"
 	}
 
-	// 根据时间添加标签
-	now := time.Now()
-	hour := now.Hour()
-	if hour >= 6 && hour < 12 {
-		tags = append(tags, "上午")
-	} else if hour >= 12 && hour < 18 {
-		tags = append(tags, "下午")
-	} else {
-		tags = append(tags, "晚上")
-	}
+	// 通用应用领域标签
+	domainTag := "其他"
 
-	// 添加日期标签
-	today := now.Format("2006-01-02")
-	tags = append(tags, today)
-
-	return tags, nil
+	return []string{typeTag, domainTag, intentTag}
 }
 
 // SuggestTags 建议标签
@@ -333,13 +347,13 @@ func (s *tagService) SuggestTags(content string, limit int) ([]string, error) {
 	}
 
 	var suggestions []string
-	
+
 	// 基于内容匹配相关标签
 	for _, tagStat := range mostUsedTags {
 		if len(suggestions) >= limit {
 			break
 		}
-		
+
 		// 简单的关键词匹配
 		tagName := tagStat.Name
 		if contains(content, tagName) || containsSimilar(content, tagName) {
@@ -347,15 +361,15 @@ func (s *tagService) SuggestTags(content string, limit int) ([]string, error) {
 		}
 	}
 
-	// 如果建议不够，添加一些通用标签
+	// 如果建议不够，尝试从最常用标签中补充
 	if len(suggestions) < limit {
-		commonTags := []string{"重要", "工作", "学习", "临时", "备份"}
-		for _, tag := range commonTags {
+		for _, tagStat := range mostUsedTags {
 			if len(suggestions) >= limit {
 				break
 			}
-			if !containsString(suggestions, tag) {
-				suggestions = append(suggestions, tag)
+			tagName := tagStat.Name
+			if !containsString(suggestions, tagName) {
+				suggestions = append(suggestions, tagName)
 			}
 		}
 	}
@@ -367,7 +381,7 @@ func (s *tagService) SuggestTags(content string, limit int) ([]string, error) {
 func (s *tagService) AddTagsToItem(itemID string, tagNames []string) error {
 	for _, tagName := range tagNames {
 		// 获取或创建标签
-		tag, err := s.GetOrCreateTagByName(tagName)
+		tag, err := s.GetOrCreateTagByName(tagName, "user-custom")
 		if err != nil {
 			return err
 		}
@@ -411,21 +425,21 @@ func (s *tagService) GetTagsForItem(itemID string) ([]models.Tag, error) {
 }
 
 // UpdateItemTags 更新条目标签
-func (s *tagService) UpdateItemTags(itemID string, tagNames []string) error {
+func (s *tagService) UpdateItemTags(itemID string, tagNames []string, source string) error {
 	// 获取或创建所有标签
 	var tagIDs []string
 	for _, tagName := range tagNames {
 		if tagName == "" {
 			continue
 		}
-		
-		tag, err := s.GetOrCreateTagByName(tagName)
+
+		tag, err := s.GetOrCreateTagByName(tagName, source)
 		if err != nil {
 			return err
 		}
-		
+
 		tagIDs = append(tagIDs, tag.ID)
-		
+
 		// 增加使用次数
 		err = s.tagRepo.IncrementTagUsage(tag.ID)
 		if err != nil {
@@ -466,7 +480,7 @@ func (s *tagService) GetSimilarTags(tagName string, limit int) ([]models.Tag, er
 		Limit:  limit * 2, // 获取更多结果进行筛选
 		SortBy: "use_count",
 	}
-	
+
 	tagsWithStats, err := s.tagRepo.SearchTags(query)
 	if err != nil {
 		return nil, err
@@ -477,7 +491,7 @@ func (s *tagService) GetSimilarTags(tagName string, limit int) ([]models.Tag, er
 		if len(similarTags) >= limit {
 			break
 		}
-		
+
 		if tagStat.Name != tagName && isSimilar(tagStat.Name, tagName) {
 			similarTags = append(similarTags, tagStat.Tag)
 		}
@@ -503,9 +517,7 @@ func (s *tagService) MergeTags(sourceTagName, targetTagName string) error {
 		return fmt.Errorf("目标标签不存在: %s", targetTagName)
 	}
 
-	if sourceTag.IsSystem || targetTag.IsSystem {
-		return fmt.Errorf("不能合并系统标签")
-	}
+	// 标签合并检查通过
 
 	return s.tagRepo.MergeTags(sourceTag.ID, targetTag.ID)
 }
@@ -515,11 +527,11 @@ func (s *tagService) ValidateTagName(name string) error {
 	if name == "" {
 		return fmt.Errorf("标签名称不能为空")
 	}
-	
+
 	if len(name) > 50 {
 		return fmt.Errorf("标签名称不能超过50个字符")
 	}
-	
+
 	// 检查特殊字符
 	invalidChars := []string{"/", "\\", "?", "%", "*", ":", "|", "\"", "<", ">"}
 	for _, char := range invalidChars {
@@ -527,14 +539,14 @@ func (s *tagService) ValidateTagName(name string) error {
 			return fmt.Errorf("标签名称不能包含特殊字符: %s", char)
 		}
 	}
-	
+
 	return nil
 }
 
 // 辅助函数
 func contains(s, substr string) bool {
-	return len(substr) > 0 && len(s) >= len(substr) && 
-		   (s == substr || findInString(s, substr))
+	return len(substr) > 0 && len(s) >= len(substr) &&
+		(s == substr || findInString(s, substr))
 }
 
 func containsString(slice []string, item string) bool {
@@ -565,7 +577,7 @@ func isSimilar(tag1, tag2 string) bool {
 	if len(tag1) == 0 || len(tag2) == 0 {
 		return false
 	}
-	
+
 	// 检查是否有共同的子字符串
 	for i := 0; i < len(tag1)-1; i++ {
 		for j := i + 2; j <= len(tag1); j++ {
@@ -575,6 +587,6 @@ func isSimilar(tag1, tag2 string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }

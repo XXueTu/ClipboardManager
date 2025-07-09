@@ -1,5 +1,5 @@
 import { Check, ChevronDown, ChevronRight, X } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Button } from './button';
 
@@ -128,13 +128,10 @@ export const SimpleTreeSelect = ({
 
       {/* 下拉面板 */}
       {isOpen && (
-        <div className="absolute top-full left-0 z-50 w-80 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-64 overflow-y-auto">
+        <div className="absolute top-full left-0 z-50 w-48 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-64 overflow-y-auto">
           {/* 头部 */}
-          <div className="sticky top-0 p-2 border-b bg-gray-50">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700">
-                选择标签 {value.length > 0 && `(${value.length})`}
-              </span>
+           
               {value.length > 0 && (
                 <Button
                   variant="ghost"
@@ -147,7 +144,6 @@ export const SimpleTreeSelect = ({
                 </Button>
               )}
             </div>
-          </div>
 
           {/* 树形内容 */}
           <div className="p-1">
@@ -199,12 +195,7 @@ export const SimpleTreeSelect = ({
                           }`}>
                             {tag.name}
                           </span>
-                          {tag.color && (
-                            <div 
-                              className="w-2 h-2 rounded-full ml-auto"
-                              style={{ backgroundColor: tag.color }}
-                            />
-                          )}
+                          
                         </div>
                       ))}
                     </div>

@@ -158,7 +158,7 @@ const TagFilterPreview = ({
                         常用标签
                     </div>
                     <div className="flex flex-wrap gap-1">
-                        {(backendTags.length > 0 ? backendTags.slice(0, 5) : ['工作', '个人', '重要', '待办', '代码']).map(tag => (
+                        {(backendTags.length > 0 ? backendTags.slice(0, 5) : []).map(tag => (
                             <Badge 
                                 key={tag} 
                                 variant="secondary" 

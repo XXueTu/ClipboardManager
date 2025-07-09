@@ -190,8 +190,8 @@ export function UpdateClipboardItem(arg1) {
   return window['go']['main']['App']['UpdateClipboardItem'](arg1);
 }
 
-export function UpdateItemTags(arg1, arg2) {
-  return window['go']['main']['App']['UpdateItemTags'](arg1, arg2);
+export function UpdateItemTags(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UpdateItemTags'](arg1, arg2, arg3);
 }
 
 export function UpdateSettings(arg1) {

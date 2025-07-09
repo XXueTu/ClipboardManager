@@ -179,12 +179,61 @@ export namespace models {
 		    return a;
 		}
 	}
+	export class Tag {
+	    id: string;
+	    name: string;
+	    description: string;
+	    color: string;
+	    group_id: string;
+	    use_count: number;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	    // Go type: time
+	    last_used_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Tag(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.color = source["color"];
+	        this.group_id = source["group_id"];
+	        this.use_count = source["use_count"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	        this.last_used_at = this.convertValues(source["last_used_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ClipboardItem {
 	    id: string;
 	    content: string;
 	    content_type: string;
 	    title: string;
-	    tags: string[];
+	    tags?: Tag[];
 	    category: string;
 	    is_favorite: boolean;
 	    use_count: number;
@@ -208,7 +257,7 @@ export namespace models {
 	        this.content = source["content"];
 	        this.content_type = source["content_type"];
 	        this.title = source["title"];
-	        this.tags = source["tags"];
+	        this.tags = this.convertValues(source["tags"], Tag);
 	        this.category = source["category"];
 	        this.is_favorite = source["is_favorite"];
 	        this.use_count = source["use_count"];
@@ -381,64 +430,13 @@ export namespace models {
 		    return a;
 		}
 	}
-	export class Tag {
-	    id: string;
-	    name: string;
-	    description: string;
-	    color: string;
-	    group_id: string;
-	    use_count: number;
-	    is_system: boolean;
-	    // Go type: time
-	    created_at: any;
-	    // Go type: time
-	    updated_at: any;
-	    // Go type: time
-	    last_used_at: any;
 	
-	    static createFrom(source: any = {}) {
-	        return new Tag(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.description = source["description"];
-	        this.color = source["color"];
-	        this.group_id = source["group_id"];
-	        this.use_count = source["use_count"];
-	        this.is_system = source["is_system"];
-	        this.created_at = this.convertValues(source["created_at"], null);
-	        this.updated_at = this.convertValues(source["updated_at"], null);
-	        this.last_used_at = this.convertValues(source["last_used_at"], null);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 	export class TagGroup {
 	    id: string;
 	    name: string;
 	    description: string;
 	    color: string;
 	    sort_order: number;
-	    is_system: boolean;
 	    // Go type: time
 	    created_at: any;
 	    // Go type: time
@@ -455,7 +453,6 @@ export namespace models {
 	        this.description = source["description"];
 	        this.color = source["color"];
 	        this.sort_order = source["sort_order"];
-	        this.is_system = source["is_system"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	    }
@@ -481,7 +478,6 @@ export namespace models {
 	export class TagSearchQuery {
 	    query: string;
 	    group_id: string;
-	    is_system?: boolean;
 	    sort_by: string;
 	    sort_order: string;
 	    limit: number;
@@ -495,7 +491,6 @@ export namespace models {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.query = source["query"];
 	        this.group_id = source["group_id"];
-	        this.is_system = source["is_system"];
 	        this.sort_by = source["sort_by"];
 	        this.sort_order = source["sort_order"];
 	        this.limit = source["limit"];
@@ -510,7 +505,6 @@ export namespace models {
 	    color: string;
 	    group_id: string;
 	    use_count: number;
-	    is_system: boolean;
 	    // Go type: time
 	    created_at: any;
 	    // Go type: time
@@ -531,7 +525,6 @@ export namespace models {
 	        this.color = source["color"];
 	        this.group_id = source["group_id"];
 	        this.use_count = source["use_count"];
-	        this.is_system = source["is_system"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	        this.last_used_at = this.convertValues(source["last_used_at"], null);
@@ -558,8 +551,6 @@ export namespace models {
 	}
 	export class TagStatistics {
 	    total_tags: number;
-	    system_tags: number;
-	    user_tags: number;
 	    most_used_tags: TagWithStats[];
 	    recent_tags: TagWithStats[];
 	    tag_groups: TagGroup[];
@@ -572,8 +563,6 @@ export namespace models {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.total_tags = source["total_tags"];
-	        this.system_tags = source["system_tags"];
-	        this.user_tags = source["user_tags"];
 	        this.most_used_tags = this.convertValues(source["most_used_tags"], TagWithStats);
 	        this.recent_tags = this.convertValues(source["recent_tags"], TagWithStats);
 	        this.tag_groups = this.convertValues(source["tag_groups"], TagGroup);

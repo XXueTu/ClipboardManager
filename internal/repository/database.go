@@ -2,7 +2,10 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"log"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -37,7 +40,6 @@ func (db *Database) migrate() error {
 		content TEXT NOT NULL,
 		content_type TEXT DEFAULT 'text',
 		title TEXT NOT NULL,
-		tags TEXT DEFAULT '[]',
 		category TEXT DEFAULT '未分类',
 		is_favorite BOOLEAN DEFAULT 0,
 		use_count INTEGER DEFAULT 0,
@@ -152,81 +154,12 @@ func (db *Database) migrate() error {
 		return err
 	}
 
-	// 初始化系统标签分组
-	if err := db.initSystemTagGroups(); err != nil {
-		return err
-	}
-
-	// 初始化系统标签
-	if err := db.initSystemTags(); err != nil {
-		return err
-	}
 
 	log.Println("数据库表创建成功")
 	return nil
 }
 
-// initSystemTagGroups 初始化系统标签分组
-func (db *Database) initSystemTagGroups() error {
-	systemGroups := []struct {
-		id, name, description, color string
-		sortOrder                    int
-	}{
-		{"system-content", "内容类型", "按内容类型分类的标签", "#1890ff", 1},
-		{"system-source", "来源应用", "按来源应用分类的标签", "#52c41a", 2},
-		{"system-time", "时间标签", "按时间分类的标签", "#faad14", 3},
-		{"system-priority", "优先级", "按优先级分类的标签", "#f5222d", 4},
-		{"user-custom", "自定义", "用户自定义标签", "#722ed1", 5},
-	}
 
-	for _, group := range systemGroups {
-		query := `INSERT OR IGNORE INTO tag_groups (id, name, description, color, sort_order, is_system) VALUES (?, ?, ?, ?, ?, ?)`
-		_, err := db.Exec(query, group.id, group.name, group.description, group.color, group.sortOrder, true)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// initSystemTags 初始化系统标签
-func (db *Database) initSystemTags() error {
-	systemTags := []struct {
-		id, name, description, color, groupID string
-	}{
-		// 内容类型标签
-		{"tag-url", "URL", "网址链接", "#1890ff", "system-content"},
-		{"tag-email", "邮箱", "邮件地址", "#1890ff", "system-content"},
-		{"tag-phone", "电话", "电话号码", "#1890ff", "system-content"},
-		{"tag-file", "文件", "文件路径", "#1890ff", "system-content"},
-		{"tag-code", "代码", "代码片段", "#1890ff", "system-content"},
-		{"tag-json", "JSON", "JSON数据", "#1890ff", "system-content"},
-		{"tag-text", "文本", "纯文本", "#1890ff", "system-content"},
-		{"tag-image", "图片", "图片内容", "#1890ff", "system-content"},
-
-		// 时间标签
-		{"tag-today", "今天", "今天的内容", "#faad14", "system-time"},
-		{"tag-yesterday", "昨天", "昨天的内容", "#faad14", "system-time"},
-		{"tag-this-week", "本周", "本周的内容", "#faad14", "system-time"},
-		{"tag-last-week", "上周", "上周的内容", "#faad14", "system-time"},
-
-		// 优先级标签
-		{"tag-important", "重要", "重要内容", "#f5222d", "system-priority"},
-		{"tag-urgent", "紧急", "紧急内容", "#f5222d", "system-priority"},
-		{"tag-normal", "一般", "一般内容", "#f5222d", "system-priority"},
-	}
-
-	for _, tag := range systemTags {
-		query := `INSERT OR IGNORE INTO tags (id, name, description, color, group_id, is_system) VALUES (?, ?, ?, ?, ?, ?)`
-		_, err := db.Exec(query, tag.id, tag.name, tag.description, tag.color, tag.groupID, true)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
 
 // runMigrations 执行数据库迁移
 func (db *Database) runMigrations() error {
@@ -242,6 +175,7 @@ func (db *Database) runMigrations() error {
 		defer rows.Close()
 		
 		hasContentType := false
+		hasTagsField := false
 		for rows.Next() {
 			var cid int
 			var name, dataType string
@@ -252,7 +186,9 @@ func (db *Database) runMigrations() error {
 			}
 			if name == "content_type" {
 				hasContentType = true
-				break
+			}
+			if name == "tags" {
+				hasTagsField = true
 			}
 		}
 		
@@ -264,9 +200,180 @@ func (db *Database) runMigrations() error {
 			}
 			log.Println("添加 content_type 字段成功")
 		}
+		
+		// 迁移旧的标签数据到新的标签关系表
+		if hasTagsField {
+			err = db.migrateTagsToRelationships()
+			if err != nil {
+				log.Printf("迁移标签数据失败: %v", err)
+				return err
+			}
+			
+			// 创建新的表结构（移除 tags 字段）
+			err = db.recreateClipboardItemsTable()
+			if err != nil {
+				log.Printf("重建剪切板表失败: %v", err)
+				return err
+			}
+			
+			log.Println("标签数据迁移成功，已移除 tags 字段")
+		}
 	}
 	
 	return nil
+}
+
+// migrateTagsToRelationships 迁移旧的标签数据到新的关系表
+func (db *Database) migrateTagsToRelationships() error {
+	log.Println("开始迁移标签数据...")
+	
+	// 查询所有包含标签的条目
+	query := `SELECT id, tags FROM clipboard_items WHERE tags IS NOT NULL AND tags != '[]'`
+	rows, err := db.Query(query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	
+	// 创建默认标签分组
+	defaultGroupID := "ai-generated"
+	_, err = db.Exec(`INSERT OR IGNORE INTO tag_groups (id, name, description, color, sort_order, is_system, created_at, updated_at) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
+		defaultGroupID, "AI生成", "AI自动生成的标签", "#52c41a", 0, true, "2024-01-01 00:00:00", "2024-01-01 00:00:00")
+	if err != nil {
+		return err
+	}
+	
+	userGroupID := "user-custom"
+	_, err = db.Exec(`INSERT OR IGNORE INTO tag_groups (id, name, description, color, sort_order, is_system, created_at, updated_at) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
+		userGroupID, "用户自定义", "用户手动创建的标签", "#1890ff", 1, false, "2024-01-01 00:00:00", "2024-01-01 00:00:00")
+	if err != nil {
+		return err
+	}
+	
+	tagMap := make(map[string]string) // tag name -> tag id
+	
+	for rows.Next() {
+		var itemID, tagsJSON string
+		if err := rows.Scan(&itemID, &tagsJSON); err != nil {
+			continue
+		}
+		
+		// 解析标签JSON
+		var tags []string
+		if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
+			continue
+		}
+		
+		// 为每个标签创建关联
+		for _, tagName := range tags {
+			if tagName == "" {
+				continue
+			}
+			
+			// 获取或创建标签
+			tagID, exists := tagMap[tagName]
+			if !exists {
+				tagID = fmt.Sprintf("tag-%d", time.Now().UnixNano())
+				
+				// 创建标签
+				_, err = db.Exec(`INSERT OR IGNORE INTO tags (id, name, description, color, group_id, use_count, is_system, created_at, updated_at, last_used_at) 
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+					tagID, tagName, "", "#1890ff", defaultGroupID, 0, true, "2024-01-01 00:00:00", "2024-01-01 00:00:00", "2024-01-01 00:00:00")
+				if err != nil {
+					log.Printf("创建标签失败: %v", err)
+					continue
+				}
+				tagMap[tagName] = tagID
+			}
+			
+			// 创建关联
+			relID := fmt.Sprintf("rel-%d", time.Now().UnixNano())
+			_, err = db.Exec(`INSERT OR IGNORE INTO clipboard_item_tags (id, item_id, tag_id, created_at) 
+				VALUES (?, ?, ?, ?)`, 
+				relID, itemID, tagID, "2024-01-01 00:00:00")
+			if err != nil {
+				log.Printf("创建标签关联失败: %v", err)
+				continue
+			}
+		}
+	}
+	
+	log.Printf("迁移了 %d 个标签", len(tagMap))
+	return nil
+}
+
+// recreateClipboardItemsTable 重建剪切板表（移除tags字段）
+func (db *Database) recreateClipboardItemsTable() error {
+	log.Println("开始重建剪切板表...")
+	
+	// 开启事务
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	
+	// 创建新表
+	newTableSQL := `
+	CREATE TABLE clipboard_items_new (
+		id TEXT PRIMARY KEY,
+		content TEXT NOT NULL,
+		content_type TEXT DEFAULT 'text',
+		title TEXT NOT NULL,
+		category TEXT DEFAULT '未分类',
+		is_favorite BOOLEAN DEFAULT 0,
+		use_count INTEGER DEFAULT 0,
+		is_deleted BOOLEAN DEFAULT 0,
+		deleted_at DATETIME NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_used_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	`
+	_, err = tx.Exec(newTableSQL)
+	if err != nil {
+		return err
+	}
+	
+	// 复制数据（不包括tags字段）
+	copyDataSQL := `
+	INSERT INTO clipboard_items_new (id, content, content_type, title, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at)
+	SELECT id, content, content_type, title, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at
+	FROM clipboard_items
+	`
+	_, err = tx.Exec(copyDataSQL)
+	if err != nil {
+		return err
+	}
+	
+	// 删除旧表
+	_, err = tx.Exec("DROP TABLE clipboard_items")
+	if err != nil {
+		return err
+	}
+	
+	// 重命名新表
+	_, err = tx.Exec("ALTER TABLE clipboard_items_new RENAME TO clipboard_items")
+	if err != nil {
+		return err
+	}
+	
+	// 重建索引
+	indexSQL := `
+	CREATE INDEX IF NOT EXISTS idx_created_at ON clipboard_items(created_at);
+	CREATE INDEX IF NOT EXISTS idx_category ON clipboard_items(category);
+	CREATE INDEX IF NOT EXISTS idx_is_favorite ON clipboard_items(is_favorite);
+	CREATE INDEX IF NOT EXISTS idx_use_count ON clipboard_items(use_count);
+	CREATE INDEX IF NOT EXISTS idx_is_deleted ON clipboard_items(is_deleted);
+	`
+	_, err = tx.Exec(indexSQL)
+	if err != nil {
+		return err
+	}
+	
+	return tx.Commit()
 }
 
 // Close 关闭数据库连接

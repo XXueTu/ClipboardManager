@@ -2,7 +2,6 @@ package repository
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -42,14 +41,12 @@ func NewClipboardRepository(db *sql.DB) ClipboardRepository {
 
 // Create 创建新的剪切板条目
 func (r *clipboardRepository) Create(item models.ClipboardItem) error {
-	tagsJSON, _ := json.Marshal(item.Tags)
-
 	query := `
-	INSERT INTO clipboard_items (id, content, content_type, title, tags, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO clipboard_items (id, content, content_type, title, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := r.db.Exec(query, item.ID, item.Content, item.ContentType, item.Title, string(tagsJSON),
+	_, err := r.db.Exec(query, item.ID, item.Content, item.ContentType, item.Title,
 		item.Category, item.IsFavorite, item.UseCount, item.IsDeleted, item.DeletedAt, item.CreatedAt, item.UpdatedAt, item.LastUsedAt)
 
 	return err
@@ -58,29 +55,29 @@ func (r *clipboardRepository) Create(item models.ClipboardItem) error {
 // GetByID 根据ID获取剪切板条目
 func (r *clipboardRepository) GetByID(id string) (*models.ClipboardItem, error) {
 	query := `
-	SELECT id, content, content_type, title, tags, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at
+	SELECT id, content, content_type, title, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at
 	FROM clipboard_items
 	WHERE id = ?
 	`
 
 	var item models.ClipboardItem
-	var tagsJSON string
 
-	err := r.db.QueryRow(query, id).Scan(&item.ID, &item.Content, &item.ContentType, &item.Title, &tagsJSON,
+	err := r.db.QueryRow(query, id).Scan(&item.ID, &item.Content, &item.ContentType, &item.Title,
 		&item.Category, &item.IsFavorite, &item.UseCount, &item.IsDeleted, &item.DeletedAt, &item.CreatedAt, &item.UpdatedAt, &item.LastUsedAt)
 
 	if err != nil {
 		return nil, err
 	}
 
-	json.Unmarshal([]byte(tagsJSON), &item.Tags)
+	// 加载标签信息
+	item.Tags, _ = r.loadTagsForItem(item.ID)
 	return &item, nil
 }
 
 // List 获取剪切板条目列表（仅活跃条目）
 func (r *clipboardRepository) List(limit, offset int) ([]models.ClipboardItem, error) {
 	query := `
-	SELECT id, content, content_type, title, tags, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at
+	SELECT id, content, content_type, title, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at
 	FROM clipboard_items
 	WHERE is_deleted = 0
 	ORDER BY created_at DESC
@@ -99,7 +96,7 @@ func (r *clipboardRepository) List(limit, offset int) ([]models.ClipboardItem, e
 // GetTrashItems 获取回收站条目
 func (r *clipboardRepository) GetTrashItems(limit, offset int) ([]models.ClipboardItem, error) {
 	query := `
-	SELECT id, content, content_type, title, tags, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at
+	SELECT id, content, content_type, title, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at
 	FROM clipboard_items
 	WHERE is_deleted = 1
 	ORDER BY deleted_at DESC
@@ -117,16 +114,15 @@ func (r *clipboardRepository) GetTrashItems(limit, offset int) ([]models.Clipboa
 
 // Update 更新剪切板条目
 func (r *clipboardRepository) Update(item models.ClipboardItem) error {
-	tagsJSON, _ := json.Marshal(item.Tags)
 	item.UpdatedAt = time.Now()
 
 	query := `
 	UPDATE clipboard_items 
-	SET content = ?, content_type = ?, title = ?, tags = ?, category = ?, is_favorite = ?, is_deleted = ?, deleted_at = ?, updated_at = ?
+	SET content = ?, content_type = ?, title = ?, category = ?, is_favorite = ?, is_deleted = ?, deleted_at = ?, updated_at = ?
 	WHERE id = ?
 	`
 
-	_, err := r.db.Exec(query, item.Content, item.ContentType, item.Title, string(tagsJSON),
+	_, err := r.db.Exec(query, item.Content, item.ContentType, item.Title,
 		item.Category, item.IsFavorite, item.IsDeleted, item.DeletedAt, item.UpdatedAt, item.ID)
 
 	return err
@@ -184,7 +180,7 @@ func (r *clipboardRepository) Search(query models.SearchQuery) (models.SearchRes
 	var result models.SearchResult
 
 	sqlQuery := `
-	SELECT id, content, content_type, title, tags, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at
+	SELECT id, content, content_type, title, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at
 	FROM clipboard_items
 	WHERE is_deleted = 0
 	`
@@ -252,7 +248,7 @@ func (r *clipboardRepository) Search(query models.SearchQuery) (models.SearchRes
 	}
 
 	// 获取总数
-	countQuery := strings.Replace(sqlQuery, "SELECT id, content, content_type, title, tags, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at", "SELECT COUNT(*)", 1)
+	countQuery := strings.Replace(sqlQuery, "SELECT id, content, content_type, title, category, is_favorite, use_count, is_deleted, deleted_at, created_at, updated_at, last_used_at", "SELECT COUNT(*)", 1)
 	var total int
 	err := r.db.QueryRow(countQuery, args...).Scan(&total)
 	if err != nil {
@@ -338,15 +334,15 @@ func (r *clipboardRepository) scanItems(rows *sql.Rows) ([]models.ClipboardItem,
 
 	for rows.Next() {
 		var item models.ClipboardItem
-		var tagsJSON string
 
-		err := rows.Scan(&item.ID, &item.Content, &item.ContentType, &item.Title, &tagsJSON,
+		err := rows.Scan(&item.ID, &item.Content, &item.ContentType, &item.Title,
 			&item.Category, &item.IsFavorite, &item.UseCount, &item.IsDeleted, &item.DeletedAt, &item.CreatedAt, &item.UpdatedAt, &item.LastUsedAt)
 		if err != nil {
 			continue
 		}
 
-		json.Unmarshal([]byte(tagsJSON), &item.Tags)
+		// 加载标签信息
+		item.Tags, _ = r.loadTagsForItem(item.ID)
 		items = append(items, item)
 	}
 
@@ -397,38 +393,61 @@ func (r *clipboardRepository) GetAllCategories() ([]string, error) {
 
 // GetAllTags 获取所有使用过的标签
 func (r *clipboardRepository) GetAllTags() ([]string, error) {
-	query := `SELECT DISTINCT tags FROM clipboard_items WHERE is_deleted = 0 AND tags != '[]' AND tags IS NOT NULL`
+	query := `
+	SELECT DISTINCT t.name 
+	FROM tags t
+	INNER JOIN clipboard_item_tags cit ON t.id = cit.tag_id
+	INNER JOIN clipboard_items ci ON cit.item_id = ci.id
+	WHERE ci.is_deleted = 0
+	ORDER BY t.name
+	`
 	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	tagSet := make(map[string]bool)
-	
+	var tags []string
 	for rows.Next() {
-		var tagsJSON string
-		if err := rows.Scan(&tagsJSON); err != nil {
+		var tagName string
+		if err := rows.Scan(&tagName); err != nil {
 			continue
 		}
-		
-		var tags []string
-		if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
+		tags = append(tags, tagName)
+	}
+
+	return tags, nil
+}
+
+// loadTagsForItem 加载条目的标签信息
+func (r *clipboardRepository) loadTagsForItem(itemID string) ([]models.Tag, error) {
+	query := `
+	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, t.created_at, t.updated_at, t.last_used_at
+	FROM tags t
+	INNER JOIN clipboard_item_tags cit ON t.id = cit.tag_id
+	WHERE cit.item_id = ?
+	ORDER BY t.name ASC
+	`
+	rows, err := r.db.Query(query, itemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []models.Tag
+	for rows.Next() {
+		var tag models.Tag
+		var groupID sql.NullString
+		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.Color, &groupID, 
+			&tag.UseCount, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt)
+		if err != nil {
 			continue
 		}
-		
-		for _, tag := range tags {
-			if tag != "" {
-				tagSet[tag] = true
-			}
+		if groupID.Valid {
+			tag.GroupID = groupID.String
 		}
+		tags = append(tags, tag)
 	}
 
-	// 转换为切片
-	result := make([]string, 0, len(tagSet))
-	for tag := range tagSet {
-		result = append(result, tag)
-	}
-
-	return result, nil
+	return tags, nil
 }

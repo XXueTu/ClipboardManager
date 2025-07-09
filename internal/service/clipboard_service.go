@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"log"
-	"time"
 
 	clipboardPkg "github.com/atotto/clipboard"
 
@@ -54,10 +53,11 @@ type clipboardService struct {
 	itemBuilder *clipboard.ItemBuilder
 	settings    *models.Settings
 	chatService ChatService
+	tagService  TagService
 }
 
 // NewClipboardService 创建新的剪切板服务
-func NewClipboardService(repo repository.ClipboardRepository, settings *models.Settings, chatService ChatService) ClipboardService {
+func NewClipboardService(repo repository.ClipboardRepository, settings *models.Settings, chatService ChatService, tagService TagService) ClipboardService {
 	analyzer := clipboard.NewAnalyzer()
 	monitor := clipboard.NewMonitor(settings)
 	itemBuilder := clipboard.NewItemBuilder(analyzer, settings)
@@ -68,6 +68,7 @@ func NewClipboardService(repo repository.ClipboardRepository, settings *models.S
 		itemBuilder: itemBuilder,
 		settings:    settings,
 		chatService: chatService,
+		tagService:  tagService,
 	}
 
 	// 设置监听器的内容处理器
@@ -233,31 +234,38 @@ func (s *clipboardService) GenerateTagsForItem(ctx context.Context, id string) (
 		return nil, err
 	}
 
-	// 合并现有标签和AI生成的标签，去重
-	existingTags := make(map[string]bool)
+	// 获取现有标签名称
+	existingTagNames := make(map[string]bool)
 	for _, tag := range item.Tags {
-		existingTags[tag] = true
+		existingTagNames[tag.Name] = true
 	}
 
-	var newTags []string
-	for _, tag := range tags {
-		if !existingTags[tag] {
-			newTags = append(newTags, tag)
+	// 筛选出新标签
+	var newTagNames []string
+	for _, tagName := range tags {
+		if !existingTagNames[tagName] {
+			newTagNames = append(newTagNames, tagName)
 		}
 	}
 
-	// 更新条目的标签
-	allTags := append(item.Tags, newTags...)
-	item.Tags = allTags
-	item.UpdatedAt = time.Now()
+	// 通过标签服务添加新标签（这会处理标签关联）
+	if len(newTagNames) > 0 {
+		// 获取所有标签名称（现有 + 新增）
+		allTagNames := make([]string, 0, len(item.Tags)+len(newTagNames))
+		for _, tag := range item.Tags {
+			allTagNames = append(allTagNames, tag.Name)
+		}
+		allTagNames = append(allTagNames, newTagNames...)
 
-	if err := s.repo.Update(*item); err != nil {
-		log.Printf("❌ 更新剪切板条目标签失败: %v", err)
-		return nil, err
+		// 更新条目标签关联
+		if err := s.tagService.UpdateItemTags(item.ID, allTagNames, "ai-generated"); err != nil {
+			log.Printf("❌ 更新条目标签失败: %v", err)
+			return nil, err
+		}
 	}
 
-	log.Printf("✅ 为条目 %s 生成了 %d 个新标签", item.Title, len(newTags))
-	return newTags, nil
+	log.Printf("✅ 为条目 %s 生成了 %d 个新标签", item.Title, len(newTagNames))
+	return newTagNames, nil
 }
 
 // GetCategoriesAndTags 获取分类和标签列表
@@ -266,12 +274,12 @@ func (s *clipboardService) GetCategoriesAndTags() (models.CategoryTagsResponse, 
 	if err != nil {
 		return models.CategoryTagsResponse{}, err
 	}
-	
+
 	tags, err := s.repo.GetAllTags()
 	if err != nil {
 		return models.CategoryTagsResponse{}, err
 	}
-	
+
 	return models.CategoryTagsResponse{
 		Categories: categories,
 		Tags:       tags,

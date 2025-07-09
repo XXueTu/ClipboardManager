@@ -96,7 +96,7 @@ export function UpdateChatSession(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateClipboardItem(arg1:models.ClipboardItem):Promise<void>;
 
-export function UpdateItemTags(arg1:string,arg2:Array<string>):Promise<void>;
+export function UpdateItemTags(arg1:string,arg2:Array<string>,arg3:string):Promise<void>;
 
 export function UpdateSettings(arg1:models.Settings):Promise<void>;
 

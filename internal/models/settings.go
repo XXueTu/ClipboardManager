@@ -23,7 +23,7 @@ func DefaultSettings() Settings {
 		MaxItems:        1000,
 		IgnorePasswords: true,
 		IgnoreImages:    false,
-		DefaultCategory: CategoryDefault,
+		DefaultCategory: CategoryText,
 		AutoCategorize:  true,
 	}
 }

@@ -26,7 +26,7 @@ type TagRepository interface {
 	SearchTags(query models.TagSearchQuery) ([]models.TagWithStats, error)
 	UpdateTag(tag models.Tag) error
 	DeleteTag(id string) error
-	GetOrCreateTag(name string) (*models.Tag, error)
+	GetOrCreateTag(name string, source string) (*models.Tag, error)
 
 	// 标签关联管理
 	AddTagToItem(itemID, tagID string) error
@@ -60,23 +60,23 @@ func NewTagRepository(db *sql.DB) TagRepository {
 // CreateTagGroup 创建标签分组
 func (r *tagRepository) CreateTagGroup(group models.TagGroup) error {
 	query := `
-	INSERT INTO tag_groups (id, name, description, color, sort_order, is_system, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tag_groups (id, name, description, color, sort_order, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := r.db.Exec(query, group.ID, group.Name, group.Description, group.Color, 
-		group.SortOrder, group.IsSystem, group.CreatedAt, group.UpdatedAt)
+	_, err := r.db.Exec(query, group.ID, group.Name, group.Description, group.Color,
+		group.SortOrder, group.CreatedAt, group.UpdatedAt)
 	return err
 }
 
 // GetTagGroupByID 根据ID获取标签分组
 func (r *tagRepository) GetTagGroupByID(id string) (*models.TagGroup, error) {
 	query := `
-	SELECT id, name, description, color, sort_order, is_system, created_at, updated_at
+	SELECT id, name, description, color, sort_order, created_at, updated_at
 	FROM tag_groups WHERE id = ?
 	`
 	var group models.TagGroup
-	err := r.db.QueryRow(query, id).Scan(&group.ID, &group.Name, &group.Description, 
-		&group.Color, &group.SortOrder, &group.IsSystem, &group.CreatedAt, &group.UpdatedAt)
+	err := r.db.QueryRow(query, id).Scan(&group.ID, &group.Name, &group.Description,
+		&group.Color, &group.SortOrder, &group.CreatedAt, &group.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (r *tagRepository) GetTagGroupByID(id string) (*models.TagGroup, error) {
 // GetTagGroups 获取所有标签分组
 func (r *tagRepository) GetTagGroups() ([]models.TagGroup, error) {
 	query := `
-	SELECT id, name, description, color, sort_order, is_system, created_at, updated_at
+	SELECT id, name, description, color, sort_order, created_at, updated_at
 	FROM tag_groups ORDER BY sort_order ASC, name ASC
 	`
 	rows, err := r.db.Query(query)
@@ -98,8 +98,8 @@ func (r *tagRepository) GetTagGroups() ([]models.TagGroup, error) {
 	var groups []models.TagGroup
 	for rows.Next() {
 		var group models.TagGroup
-		err := rows.Scan(&group.ID, &group.Name, &group.Description, &group.Color, 
-			&group.SortOrder, &group.IsSystem, &group.CreatedAt, &group.UpdatedAt)
+		err := rows.Scan(&group.ID, &group.Name, &group.Description, &group.Color,
+			&group.SortOrder, &group.CreatedAt, &group.UpdatedAt)
 		if err != nil {
 			continue
 		}
@@ -116,7 +116,7 @@ func (r *tagRepository) UpdateTagGroup(group models.TagGroup) error {
 	SET name = ?, description = ?, color = ?, sort_order = ?, updated_at = ?
 	WHERE id = ?
 	`
-	_, err := r.db.Exec(query, group.Name, group.Description, group.Color, 
+	_, err := r.db.Exec(query, group.Name, group.Description, group.Color,
 		group.SortOrder, group.UpdatedAt, group.ID)
 	return err
 }
@@ -139,24 +139,24 @@ func (r *tagRepository) DeleteTagGroup(id string) error {
 // CreateTag 创建标签
 func (r *tagRepository) CreateTag(tag models.Tag) error {
 	query := `
-	INSERT INTO tags (id, name, description, color, group_id, use_count, is_system, created_at, updated_at, last_used_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tags (id, name, description, color, group_id, use_count, created_at, updated_at, last_used_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := r.db.Exec(query, tag.ID, tag.Name, tag.Description, tag.Color, 
-		tag.GroupID, tag.UseCount, tag.IsSystem, tag.CreatedAt, tag.UpdatedAt, tag.LastUsedAt)
+	_, err := r.db.Exec(query, tag.ID, tag.Name, tag.Description, tag.Color,
+		tag.GroupID, tag.UseCount, tag.CreatedAt, tag.UpdatedAt, tag.LastUsedAt)
 	return err
 }
 
 // GetTagByID 根据ID获取标签
 func (r *tagRepository) GetTagByID(id string) (*models.Tag, error) {
 	query := `
-	SELECT id, name, description, color, group_id, use_count, is_system, created_at, updated_at, last_used_at
+	SELECT id, name, description, color, group_id, use_count, created_at, updated_at, last_used_at
 	FROM tags WHERE id = ?
 	`
 	var tag models.Tag
 	var groupID sql.NullString
-	err := r.db.QueryRow(query, id).Scan(&tag.ID, &tag.Name, &tag.Description, 
-		&tag.Color, &groupID, &tag.UseCount, &tag.IsSystem, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt)
+	err := r.db.QueryRow(query, id).Scan(&tag.ID, &tag.Name, &tag.Description,
+		&tag.Color, &groupID, &tag.UseCount, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -169,13 +169,13 @@ func (r *tagRepository) GetTagByID(id string) (*models.Tag, error) {
 // GetTagByName 根据名称获取标签
 func (r *tagRepository) GetTagByName(name string) (*models.Tag, error) {
 	query := `
-	SELECT id, name, description, color, group_id, use_count, is_system, created_at, updated_at, last_used_at
+	SELECT id, name, description, color, group_id, use_count, created_at, updated_at, last_used_at
 	FROM tags WHERE name = ?
 	`
 	var tag models.Tag
 	var groupID sql.NullString
-	err := r.db.QueryRow(query, name).Scan(&tag.ID, &tag.Name, &tag.Description, 
-		&tag.Color, &groupID, &tag.UseCount, &tag.IsSystem, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt)
+	err := r.db.QueryRow(query, name).Scan(&tag.ID, &tag.Name, &tag.Description,
+		&tag.Color, &groupID, &tag.UseCount, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +188,7 @@ func (r *tagRepository) GetTagByName(name string) (*models.Tag, error) {
 // GetTags 获取所有标签
 func (r *tagRepository) GetTags() ([]models.Tag, error) {
 	query := `
-	SELECT id, name, description, color, group_id, use_count, is_system, created_at, updated_at, last_used_at
+	SELECT id, name, description, color, group_id, use_count, created_at, updated_at, last_used_at
 	FROM tags ORDER BY use_count DESC, name ASC
 	`
 	rows, err := r.db.Query(query)
@@ -204,15 +204,15 @@ func (r *tagRepository) GetTags() ([]models.Tag, error) {
 func (r *tagRepository) GetTagsByGroup(groupID string) ([]models.Tag, error) {
 	var query string
 	var args []interface{}
-	
+
 	if groupID == "" {
 		query = `
-		SELECT id, name, description, color, group_id, use_count, is_system, created_at, updated_at, last_used_at
+		SELECT id, name, description, color, group_id, use_count, created_at, updated_at, last_used_at
 		FROM tags WHERE group_id IS NULL ORDER BY use_count DESC, name ASC
 		`
 	} else {
 		query = `
-		SELECT id, name, description, color, group_id, use_count, is_system, created_at, updated_at, last_used_at
+		SELECT id, name, description, color, group_id, use_count, created_at, updated_at, last_used_at
 		FROM tags WHERE group_id = ? ORDER BY use_count DESC, name ASC
 		`
 		args = append(args, groupID)
@@ -230,7 +230,7 @@ func (r *tagRepository) GetTagsByGroup(groupID string) ([]models.Tag, error) {
 // SearchTags 搜索标签
 func (r *tagRepository) SearchTags(query models.TagSearchQuery) ([]models.TagWithStats, error) {
 	sqlQuery := `
-	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, t.is_system, 
+	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, 
 		   t.created_at, t.updated_at, t.last_used_at,
 		   COUNT(DISTINCT cit.item_id) as item_count
 	FROM tags t
@@ -238,27 +238,22 @@ func (r *tagRepository) SearchTags(query models.TagSearchQuery) ([]models.TagWit
 	LEFT JOIN clipboard_items ci ON cit.item_id = ci.id AND ci.is_deleted = 0
 	WHERE 1=1
 	`
-	
+
 	var args []interface{}
-	
+
 	if query.Query != "" {
 		sqlQuery += " AND (t.name LIKE ? OR t.description LIKE ?)"
 		searchTerm := "%" + query.Query + "%"
 		args = append(args, searchTerm, searchTerm)
 	}
-	
+
 	if query.GroupID != "" {
 		sqlQuery += " AND t.group_id = ?"
 		args = append(args, query.GroupID)
 	}
-	
-	if query.IsSystem != nil {
-		sqlQuery += " AND t.is_system = ?"
-		args = append(args, *query.IsSystem)
-	}
-	
+
 	sqlQuery += " GROUP BY t.id"
-	
+
 	// 排序
 	switch query.SortBy {
 	case "name":
@@ -272,19 +267,19 @@ func (r *tagRepository) SearchTags(query models.TagSearchQuery) ([]models.TagWit
 	default:
 		sqlQuery += " ORDER BY t.use_count DESC, t.name ASC"
 	}
-	
+
 	if query.SortOrder == "desc" {
 		sqlQuery += " DESC"
 	} else {
 		sqlQuery += " ASC"
 	}
-	
+
 	// 分页
 	if query.Limit > 0 {
 		sqlQuery += " LIMIT ? OFFSET ?"
 		args = append(args, query.Limit, query.Offset)
 	}
-	
+
 	rows, err := r.db.Query(sqlQuery, args...)
 	if err != nil {
 		return nil, err
@@ -295,8 +290,8 @@ func (r *tagRepository) SearchTags(query models.TagSearchQuery) ([]models.TagWit
 	for rows.Next() {
 		var tag models.TagWithStats
 		var groupID sql.NullString
-		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.Color, &groupID, 
-			&tag.UseCount, &tag.IsSystem, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt, &tag.ItemCount)
+		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.Color, &groupID,
+			&tag.UseCount, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt, &tag.ItemCount)
 		if err != nil {
 			continue
 		}
@@ -306,6 +301,24 @@ func (r *tagRepository) SearchTags(query models.TagSearchQuery) ([]models.TagWit
 		tags = append(tags, tag)
 	}
 	return tags, nil
+}
+
+// loadTagsForItem 加载条目的标签信息
+func (r *tagRepository) loadTagsForItem(itemID string) ([]models.Tag, error) {
+	query := `
+	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, t.created_at, t.updated_at, t.last_used_at
+	FROM tags t
+	INNER JOIN clipboard_item_tags cit ON t.id = cit.tag_id
+	WHERE cit.item_id = ?
+	ORDER BY t.name ASC
+	`
+	rows, err := r.db.Query(query, itemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanTags(rows)
 }
 
 // UpdateTag 更新标签
@@ -320,7 +333,7 @@ func (r *tagRepository) UpdateTag(tag models.Tag) error {
 	if tag.GroupID != "" {
 		groupID = tag.GroupID
 	}
-	_, err := r.db.Exec(query, tag.Name, tag.Description, tag.Color, 
+	_, err := r.db.Exec(query, tag.Name, tag.Description, tag.Color,
 		groupID, tag.UpdatedAt, tag.ID)
 	return err
 }
@@ -341,11 +354,15 @@ func (r *tagRepository) DeleteTag(id string) error {
 }
 
 // GetOrCreateTag 获取或创建标签
-func (r *tagRepository) GetOrCreateTag(name string) (*models.Tag, error) {
+func (r *tagRepository) GetOrCreateTag(name string, source string) (*models.Tag, error) {
 	// 先尝试获取已有标签
 	tag, err := r.GetTagByName(name)
 	if err == nil {
 		return tag, nil
+	}
+
+	if source == "" {
+		source = "user-custom"
 	}
 
 	// 如果不存在，创建新标签
@@ -354,9 +371,8 @@ func (r *tagRepository) GetOrCreateTag(name string) (*models.Tag, error) {
 		Name:        name,
 		Description: "",
 		Color:       "#1890ff",
-		GroupID:     "user-custom",
+		GroupID:     source,
 		UseCount:    0,
-		IsSystem:    false,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 		LastUsedAt:  time.Now(),
@@ -391,7 +407,7 @@ func (r *tagRepository) RemoveTagFromItem(itemID, tagID string) error {
 // GetTagsForItem 获取条目的标签
 func (r *tagRepository) GetTagsForItem(itemID string) ([]models.Tag, error) {
 	query := `
-	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, t.is_system, 
+	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, 
 		   t.created_at, t.updated_at, t.last_used_at
 	FROM tags t
 	INNER JOIN clipboard_item_tags cit ON t.id = cit.tag_id
@@ -410,7 +426,7 @@ func (r *tagRepository) GetTagsForItem(itemID string) ([]models.Tag, error) {
 // GetItemsForTag 获取标签的条目
 func (r *tagRepository) GetItemsForTag(tagID string) ([]models.ClipboardItem, error) {
 	query := `
-	SELECT ci.id, ci.content, ci.content_type, ci.title, ci.tags, ci.category, ci.is_favorite, ci.use_count, 
+	SELECT ci.id, ci.content, ci.content_type, ci.title, ci.category, ci.is_favorite, ci.use_count, 
 		   ci.is_deleted, ci.deleted_at, ci.created_at, ci.updated_at, ci.last_used_at
 	FROM clipboard_items ci
 	INNER JOIN clipboard_item_tags cit ON ci.id = cit.item_id
@@ -423,20 +439,18 @@ func (r *tagRepository) GetItemsForTag(tagID string) ([]models.ClipboardItem, er
 	}
 	defer rows.Close()
 
-	// 这里需要复用clipboard_repository的scanItems方法
-	// 或者重新实现一个简化版本
 	var items []models.ClipboardItem
 	for rows.Next() {
 		var item models.ClipboardItem
-		var tagsJSON string
-		err := rows.Scan(&item.ID, &item.Content, &item.ContentType, &item.Title, &tagsJSON, &item.Category, 
-			&item.IsFavorite, &item.UseCount, &item.IsDeleted, &item.DeletedAt, 
+		err := rows.Scan(&item.ID, &item.Content, &item.ContentType, &item.Title, &item.Category,
+			&item.IsFavorite, &item.UseCount, &item.IsDeleted, &item.DeletedAt,
 			&item.CreatedAt, &item.UpdatedAt, &item.LastUsedAt)
 		if err != nil {
 			continue
 		}
-		// 解析tags JSON
-		// json.Unmarshal([]byte(tagsJSON), &item.Tags)
+
+		// 加载标签信息
+		item.Tags, _ = r.loadTagsForItem(item.ID)
 		items = append(items, item)
 	}
 	return items, nil
@@ -487,12 +501,6 @@ func (r *tagRepository) GetTagStatistics() (models.TagStatistics, error) {
 	// 获取总标签数
 	r.db.QueryRow("SELECT COUNT(*) FROM tags").Scan(&stats.TotalTags)
 
-	// 获取系统标签数
-	r.db.QueryRow("SELECT COUNT(*) FROM tags WHERE is_system = 1").Scan(&stats.SystemTags)
-
-	// 获取用户标签数
-	stats.UserTags = stats.TotalTags - stats.SystemTags
-
 	// 获取最常用标签
 	mostUsedTags, _ := r.GetMostUsedTags(10)
 	stats.MostUsedTags = mostUsedTags
@@ -515,7 +523,7 @@ func (r *tagRepository) GetTagStatistics() (models.TagStatistics, error) {
 // GetMostUsedTags 获取最常用标签
 func (r *tagRepository) GetMostUsedTags(limit int) ([]models.TagWithStats, error) {
 	query := `
-	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, t.is_system, 
+	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, 
 		   t.created_at, t.updated_at, t.last_used_at,
 		   COUNT(DISTINCT cit.item_id) as item_count
 	FROM tags t
@@ -535,8 +543,8 @@ func (r *tagRepository) GetMostUsedTags(limit int) ([]models.TagWithStats, error
 	for rows.Next() {
 		var tag models.TagWithStats
 		var groupID sql.NullString
-		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.Color, &groupID, 
-			&tag.UseCount, &tag.IsSystem, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt, &tag.ItemCount)
+		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.Color, &groupID,
+			&tag.UseCount, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt, &tag.ItemCount)
 		if err != nil {
 			continue
 		}
@@ -551,7 +559,7 @@ func (r *tagRepository) GetMostUsedTags(limit int) ([]models.TagWithStats, error
 // GetRecentTags 获取最近使用标签
 func (r *tagRepository) GetRecentTags(limit int) ([]models.TagWithStats, error) {
 	query := `
-	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, t.is_system, 
+	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, 
 		   t.created_at, t.updated_at, t.last_used_at,
 		   COUNT(DISTINCT cit.item_id) as item_count
 	FROM tags t
@@ -571,8 +579,8 @@ func (r *tagRepository) GetRecentTags(limit int) ([]models.TagWithStats, error) 
 	for rows.Next() {
 		var tag models.TagWithStats
 		var groupID sql.NullString
-		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.Color, &groupID, 
-			&tag.UseCount, &tag.IsSystem, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt, &tag.ItemCount)
+		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.Color, &groupID,
+			&tag.UseCount, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt, &tag.ItemCount)
 		if err != nil {
 			continue
 		}
@@ -587,7 +595,7 @@ func (r *tagRepository) GetRecentTags(limit int) ([]models.TagWithStats, error) 
 // GetUnusedTags 获取未使用标签
 func (r *tagRepository) GetUnusedTags() ([]models.Tag, error) {
 	query := `
-	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, t.is_system, 
+	SELECT t.id, t.name, t.description, t.color, t.group_id, t.use_count, 
 		   t.created_at, t.updated_at, t.last_used_at
 	FROM tags t
 	LEFT JOIN clipboard_item_tags cit ON t.id = cit.tag_id
@@ -609,7 +617,7 @@ func (r *tagRepository) CleanupUnusedTags() error {
 	DELETE FROM tags 
 	WHERE id NOT IN (
 		SELECT DISTINCT tag_id FROM clipboard_item_tags
-	) AND is_system = 0
+	)
 	`
 	_, err := r.db.Exec(query)
 	return err
@@ -658,8 +666,8 @@ func (r *tagRepository) scanTags(rows *sql.Rows) ([]models.Tag, error) {
 	for rows.Next() {
 		var tag models.Tag
 		var groupID sql.NullString
-		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.Color, &groupID, 
-			&tag.UseCount, &tag.IsSystem, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt)
+		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.Color, &groupID,
+			&tag.UseCount, &tag.CreatedAt, &tag.UpdatedAt, &tag.LastUsedAt)
 		if err != nil {
 			continue
 		}

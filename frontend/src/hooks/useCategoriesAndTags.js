@@ -32,7 +32,7 @@ export const useCategoriesAndTags = () => {
             setError(err.message || '获取分类和标签失败');
             // 使用默认分类作为后备
             setCategoriesAndTags({
-                categories: ['未分类', '网址', '文件', '邮箱', '电话', '代码', '笔记', '命令', 'JSON', '标识符', '地址', '数字'],
+                categories: ['未分类'], // 仅保留默认分类，其他通过AI生成
                 tags: []
             });
         } finally {

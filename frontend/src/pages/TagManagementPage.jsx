@@ -434,10 +434,17 @@ const TagManagementPage = () => {
         title: (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
             <Space>
-              <Tag color="default" style={{ margin: 0 }}>
+              <span style={{ 
+                color: '#666', 
+                fontWeight: 'bold',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
                 <FolderOpenOutlined />
-                <span style={{ marginLeft: 4 }}>未分组</span>
-              </Tag>
+                未分组
+              </span>
               <Badge count={ungroupedTags.length} size="small" />
             </Space>
             <Button 

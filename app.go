@@ -46,7 +46,7 @@ func NewApp() *App {
 	// 创建服务层
 	chatService := service.NewChatService(chatRepo)
 	tagService := service.NewTagService(tagRepo, clipboardRepo)
-	clipboardService := service.NewClipboardService(clipboardRepo, settings, chatService)
+	clipboardService := service.NewClipboardService(clipboardRepo, settings, chatService, tagService)
 	windowManager := window.NewManager()
 	appService := service.NewAppService(configManager, windowManager, clipboardService, chatService)
 
@@ -309,8 +309,8 @@ func (a *App) GetTagsForItem(itemID string) ([]models.Tag, error) {
 }
 
 // UpdateItemTags 更新条目标签
-func (a *App) UpdateItemTags(itemID string, tagNames []string) error {
-	return a.tagService.UpdateItemTags(itemID, tagNames)
+func (a *App) UpdateItemTags(itemID string, tagNames []string, source string) error {
+	return a.tagService.UpdateItemTags(itemID, tagNames, source)
 }
 
 // AddTagsToItem 为条目添加标签
