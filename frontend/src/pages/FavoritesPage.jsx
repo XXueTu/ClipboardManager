@@ -1,9 +1,7 @@
-import { Heart, RefreshCw } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 // shadcn/ui 组件
-import { Button } from '../components/ui/button';
-import { Card, CardContent } from '../components/ui/card';
 import { useToast } from '../components/ui/toast';
 
 import ClipboardItemCard from '../components/ClipboardItemCard';
@@ -156,33 +154,7 @@ const FavoritesPage = ({ favoriteItems, onCopy, onToggleFavorite, onDelete, onEd
                 onSearchFormChange={onSearchFormChange}
             />
             
-            {/* 收藏信息卡片 - 简化版 */}
-            <Card className="mb-6 rounded-2xl border-2 border-border/50 shadow-sm">
-                <CardContent className="py-4">
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center space-x-2">
-                            <Heart className="h-5 w-5 text-red-500 fill-red-500" />
-                            <span className="font-medium">
-                                我的收藏 ({hasSearchActivity ? currentItems.length : safeFavoriteItems?.length || 0})
-                                {hasSearchActivity && (
-                                    <span className="text-sm text-muted-foreground ml-1">
-                                        / 共{safeFavoriteItems?.length || 0}个
-                                    </span>
-                                )}
-                            </span>
-                        </div>
-                        <Button 
-                            variant="outline"
-                            size="sm"
-                            onClick={onRefresh}
-                            className="flex items-center space-x-1 rounded-lg border-2 border-border/50 hover:border-primary/50 transition-all duration-200"
-                        >
-                            <RefreshCw className="h-4 w-4" />
-                            <span>刷新</span>
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+            
 
             {/* 内容区域 */}
             {loading ? (

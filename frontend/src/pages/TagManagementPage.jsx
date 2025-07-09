@@ -1,70 +1,104 @@
 import {
   BulbOutlined,
-  ClockCircleOutlined,
   DeleteOutlined,
   EditOutlined,
-  FireOutlined,
+  EyeOutlined,
   FolderOutlined,
   PlusOutlined,
   SettingOutlined,
-  TagOutlined
+  TagOutlined,
+  FolderOpenOutlined,
+  MoreOutlined,
+  BarChartOutlined,
+  AppstoreAddOutlined
 } from '@ant-design/icons';
 import {
   Badge,
   Button,
   Card,
-  Col,
   ColorPicker,
-  Divider,
   Drawer,
+  Dropdown,
   Form,
   Input,
   message,
   Modal,
-  Popconfirm,
-  Row,
   Select,
   Space,
   Statistic,
-  Switch,
-  Table,
-  Tabs,
   Tag,
-  Typography
+  Tree
 } from 'antd';
 import React, { useEffect, useState } from 'react';
 import {
-  CleanupUnusedTags,
   CreateTag,
   CreateTagGroup,
   DeleteTag,
   DeleteTagGroup,
-  GetMostUsedTags,
-  GetRecentTags,
   GetTagGroups,
   GetTags,
   GetTagStatistics,
-  SearchTags,
   UpdateTag,
   UpdateTagGroup
 } from '../../wailsjs/go/main/App';
 
-const { Title, Text } = Typography;
-const { TabPane } = Tabs;
 const { Search } = Input;
+
+// 统一错误处理函数
+const getErrorMessage = (error) => {
+  // 如果是字符串，直接返回
+  if (typeof error === 'string') {
+    return error;
+  }
+  
+  // 处理 Wails 的错误格式
+  if (error && typeof error === 'object') {
+    // 检查是否有 error 字段（Wails 常见格式）
+    if (error.error && typeof error.error === 'string') {
+      return error.error;
+    }
+    
+    // 检查是否有 message 字段
+    if (error.message && typeof error.message === 'string') {
+      return error.message;
+    }
+    
+    // 检查是否有 data 字段
+    if (error.data && typeof error.data === 'string') {
+      return error.data;
+    }
+    
+    // 如果是错误对象，尝试获取其描述
+    if (error.toString && typeof error.toString === 'function') {
+      const errorStr = error.toString();
+      if (errorStr !== '[object Object]') {
+        return errorStr;
+      }
+    }
+    
+    // 作为最后手段，将对象序列化
+    try {
+      const serialized = JSON.stringify(error);
+      if (serialized && serialized !== '{}') {
+        return serialized;
+      }
+    } catch (e) {
+      // JSON.stringify 失败
+    }
+  }
+  
+  return '操作失败，请重试';
+};
 
 const TagManagementPage = () => {
   const [tags, setTags] = useState([]);
   const [tagGroups, setTagGroups] = useState([]);
   const [statistics, setStatistics] = useState(null);
-  const [mostUsedTags, setMostUsedTags] = useState([]);
-  const [recentTags, setRecentTags] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState('');
-  const [activeTab, setActiveTab] = useState('tags');
-  const [viewMode, setViewMode] = useState('table'); // table, grid
-
+  const [expandedKeys, setExpandedKeys] = useState([]);
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  
   // 模态框状态
   const [tagModalVisible, setTagModalVisible] = useState(false);
   const [groupModalVisible, setGroupModalVisible] = useState(false);
@@ -87,9 +121,7 @@ const TagManagementPage = () => {
       await Promise.all([
         loadTags(),
         loadTagGroups(),
-        loadStatistics(),
-        loadMostUsedTags(),
-        loadRecentTags()
+        loadStatistics()
       ]);
     } catch (error) {
       message.error('加载数据失败');
@@ -101,7 +133,7 @@ const TagManagementPage = () => {
   const loadTags = async () => {
     try {
       const result = await GetTags();
-      setTags(result || []);
+      setTags(Array.isArray(result) ? result : []);
     } catch (error) {
       console.error('加载标签失败:', error);
     }
@@ -110,9 +142,9 @@ const TagManagementPage = () => {
   const loadTagGroups = async () => {
     try {
       const result = await GetTagGroups();
-      setTagGroups(result || []);
+      setTagGroups(Array.isArray(result) ? result : []);
     } catch (error) {
-      console.error('加载标签分组失败:', error);
+      console.error('加载分组失败:', error);
     }
   };
 
@@ -121,58 +153,17 @@ const TagManagementPage = () => {
       const result = await GetTagStatistics();
       setStatistics(result);
     } catch (error) {
-      console.error('加载统计信息失败:', error);
+      console.error('加载统计失败:', error);
     }
-  };
-
-  const loadMostUsedTags = async () => {
-    try {
-      const result = await GetMostUsedTags(10);
-      setMostUsedTags(result || []);
-    } catch (error) {
-      console.error('加载热门标签失败:', error);
-    }
-  };
-
-  const loadRecentTags = async () => {
-    try {
-      const result = await GetRecentTags(10);
-      setRecentTags(result || []);
-    } catch (error) {
-      console.error('加载最近标签失败:', error);
-    }
-  };
-
-  // 搜索和过滤
-  const handleSearch = async (value) => {
-    setSearchText(value);
-    if (value) {
-      try {
-        const result = await SearchTags({
-          query: value,
-          group_id: selectedGroup,
-          limit: 100,
-          offset: 0
-        });
-        setTags(result || []);
-      } catch (error) {
-        message.error('搜索失败');
-      }
-    } else {
-      loadTags();
-    }
-  };
-
-  const handleGroupFilter = (groupId) => {
-    setSelectedGroup(groupId);
-    // 实际应该调用API按分组过滤
-    loadTags();
   };
 
   // 标签操作
-  const handleCreateTag = () => {
+  const handleCreateTag = (groupId = null) => {
     setEditingTag(null);
     tagForm.resetFields();
+    if (groupId) {
+      tagForm.setFieldsValue({ group_id: groupId });
+    }
     setTagModalVisible(true);
   };
 
@@ -192,29 +183,41 @@ const TagManagementPage = () => {
       await DeleteTag(tagId);
       message.success('标签删除成功');
       loadTags();
-      loadStatistics();
     } catch (error) {
-      message.error('删除失败');
+      console.error('删除标签失败:', error);
+      const errorMsg = getErrorMessage(error);
+      message.error(`删除失败: ${errorMsg}`);
     }
   };
 
   const handleTagSubmit = async (values) => {
     try {
+      const color = typeof values.color === 'object' ? values.color.toHexString() : values.color;
+      
       if (editingTag) {
         await UpdateTag({
           ...editingTag,
-          ...values
+          name: values.name,
+          description: values.description || '',
+          color: color,
+          group_id: values.group_id
         });
         message.success('标签更新成功');
       } else {
-        await CreateTag(values.name, values.description, values.color, values.group_id);
+        await CreateTag(
+          values.name,
+          values.description || '',
+          color,
+          values.group_id
+        );
         message.success('标签创建成功');
       }
       setTagModalVisible(false);
       loadTags();
-      loadStatistics();
     } catch (error) {
-      message.error(editingTag ? '更新失败' : '创建失败');
+      console.error('标签操作失败:', error);
+      const errorMsg = getErrorMessage(error);
+      message.error(editingTag ? `更新失败: ${errorMsg}` : `创建失败: ${errorMsg}`);
     }
   };
 
@@ -243,13 +246,14 @@ const TagManagementPage = () => {
       loadTagGroups();
       loadTags();
     } catch (error) {
-      message.error('删除失败');
+      console.error('删除分组失败:', error);
+      const errorMsg = getErrorMessage(error);
+      message.error(`删除失败: ${errorMsg}`);
     }
   };
 
   const handleGroupSubmit = async (values) => {
     try {
-      // 确保颜色值正确处理
       const color = typeof values.color === 'object' ? values.color.toHexString() : values.color;
       const sortOrder = parseInt(values.sort_order) || 0;
       
@@ -275,261 +279,288 @@ const TagManagementPage = () => {
       loadTagGroups();
     } catch (error) {
       console.error('分组操作失败:', error);
-      message.error(editingGroup ? '更新失败: ' + error.message : '创建失败: ' + error.message);
+      const errorMsg = getErrorMessage(error);
+      message.error(editingGroup ? `更新失败: ${errorMsg}` : `创建失败: ${errorMsg}`);
     }
   };
 
-  // 维护操作
-  const handleCleanupUnusedTags = async () => {
-    try {
-      await CleanupUnusedTags();
-      message.success('清理完成');
-      loadTags();
-      loadStatistics();
-    } catch (error) {
-      message.error('清理失败');
+
+  // 构建树形数据
+  const buildTreeData = () => {
+    const filteredTags = tags.filter(tag => 
+      !searchText || tag.name.toLowerCase().includes(searchText.toLowerCase())
+    );
+    
+    const groupedTags = {};
+    const ungroupedTags = [];
+    
+    filteredTags.forEach(tag => {
+      if (tag.group_id) {
+        if (!groupedTags[tag.group_id]) {
+          groupedTags[tag.group_id] = [];
+        }
+        groupedTags[tag.group_id].push(tag);
+      } else {
+        ungroupedTags.push(tag);
+      }
+    });
+
+    const treeData = [];
+    
+    // 添加分组节点
+    tagGroups.forEach(group => {
+      const groupTags = groupedTags[group.id] || [];
+      const node = {
+        key: `group-${group.id}`,
+        title: (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <Space>
+              <span style={{ 
+                color: group.color || '#333', 
+                fontWeight: 'bold',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <FolderOutlined />
+                {group.name}
+              </span>
+              <Badge count={groupTags.length} size="small" />
+            </Space>
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'add-tag',
+                    label: '添加标签',
+                    icon: <PlusOutlined />,
+                    onClick: () => handleCreateTag(group.id)
+                  },
+                  {
+                    key: 'edit-group',
+                    label: '编辑分组',
+                    icon: <EditOutlined />,
+                    onClick: () => handleEditGroup(group)
+                  },
+                  {
+                    key: 'delete-group',
+                    label: '删除分组',
+                    icon: <DeleteOutlined />,
+                    danger: true,
+                    onClick: () => {
+                      Modal.confirm({
+                        title: '确定删除分组?',
+                        content: '删除分组后，其中的标签将变为未分组状态。',
+                        onOk: () => handleDeleteGroup(group.id)
+                      });
+                    }
+                  }
+                ]
+              }}
+              trigger={['hover']}
+            >
+              <Button type="text" size="small" icon={<MoreOutlined />} />
+            </Dropdown>
+          </div>
+        ),
+        children: groupTags.map(tag => ({
+          key: `tag-${tag.id}`,
+          title: (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '13px', color: '#333' }}>
+                  {tag.name}
+                  {tag.is_system && (
+                    <span style={{ fontSize: '10px', opacity: 0.6, marginLeft: '4px' }}>(系统)</span>
+                  )}
+                </span>
+                {tag.use_count > 0 && (
+                  <Badge count={tag.use_count} size="small" />
+                )}
+              </div>
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'edit-tag',
+                      label: tag.is_system ? '查看标签' : '编辑标签',
+                      icon: tag.is_system ? <EyeOutlined /> : <EditOutlined />,
+                      onClick: () => {
+                        if (tag.is_system) {
+                          message.warning('系统标签不可编辑');
+                        } else {
+                          handleEditTag(tag);
+                        }
+                      }
+                    },
+                    {
+                      key: 'delete-tag',
+                      label: '删除标签',
+                      icon: <DeleteOutlined />,
+                      danger: true,
+                      disabled: tag.is_system,
+                      onClick: () => {
+                        if (tag.is_system) {
+                          message.warning('系统标签不可删除');
+                          return;
+                        }
+                        Modal.confirm({
+                          title: '确定删除标签?',
+                          content: '删除后无法恢复。',
+                          onOk: () => handleDeleteTag(tag.id)
+                        });
+                      }
+                    }
+                  ]
+                }}
+                trigger={['hover']}
+              >
+                <Button type="text" size="small" icon={<MoreOutlined />} />
+              </Dropdown>
+            </div>
+          ),
+          isLeaf: true,
+          data: tag
+        }))
+      };
+      treeData.push(node);
+    });
+
+    // 添加未分组标签
+    if (ungroupedTags.length > 0) {
+      const node = {
+        key: 'ungrouped',
+        title: (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <Space>
+              <Tag color="default" style={{ margin: 0 }}>
+                <FolderOpenOutlined />
+                <span style={{ marginLeft: 4 }}>未分组</span>
+              </Tag>
+              <Badge count={ungroupedTags.length} size="small" />
+            </Space>
+            <Button 
+              type="text" 
+              size="small" 
+              icon={<PlusOutlined />}
+              onClick={() => handleCreateTag(null)}
+            />
+          </div>
+        ),
+        children: ungroupedTags.map(tag => ({
+          key: `tag-${tag.id}`,
+          title: (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '13px', color: '#333' }}>
+                  {tag.name}
+                  {tag.is_system && (
+                    <span style={{ fontSize: '10px', opacity: 0.6, marginLeft: '4px' }}>(系统)</span>
+                  )}
+                </span>
+                {tag.use_count > 0 && (
+                  <Badge count={tag.use_count} size="small" />
+                )}
+              </div>
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'edit-tag',
+                      label: tag.is_system ? '查看标签' : '编辑标签',
+                      icon: tag.is_system ? <EyeOutlined /> : <EditOutlined />,
+                      onClick: () => {
+                        if (tag.is_system) {
+                          message.warning('系统标签不可编辑');
+                        } else {
+                          handleEditTag(tag);
+                        }
+                      }
+                    },
+                    {
+                      key: 'delete-tag',
+                      label: '删除标签',
+                      icon: <DeleteOutlined />,
+                      danger: true,
+                      disabled: tag.is_system,
+                      onClick: () => {
+                        if (tag.is_system) {
+                          message.warning('系统标签不可删除');
+                          return;
+                        }
+                        Modal.confirm({
+                          title: '确定删除标签?',
+                          content: '删除后无法恢复。',
+                          onOk: () => handleDeleteTag(tag.id)
+                        });
+                      }
+                    }
+                  ]
+                }}
+                trigger={['hover']}
+              >
+                <Button type="text" size="small" icon={<MoreOutlined />} />
+              </Dropdown>
+            </div>
+          ),
+          isLeaf: true,
+          data: tag
+        }))
+      };
+      treeData.push(node);
     }
+
+    return treeData;
   };
 
-  // 表格列配置
-  const tagColumns = [
-    {
-      title: '标签名称',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text, record) => (
-        <Tag color={record.color} style={{ margin: 0 }}>
-          {text}
-        </Tag>
-      ),
-      sorter: (a, b) => a.name.localeCompare(b.name),
-    },
-    {
-      title: '描述',
-      dataIndex: 'description',
-      key: 'description',
-      ellipsis: true,
-    },
-    {
-      title: '分组',
-      dataIndex: 'group_id',
-      key: 'group_id',
-      render: (groupId) => {
-        const group = tagGroups.find(g => g.id === groupId);
-        return group ? (
-          <Tag color={group.color} icon={<FolderOutlined />}>
-            {group.name}
-          </Tag>
-        ) : '未分组';
-      },
-      filters: tagGroups.map(group => ({
-        text: group.name,
-        value: group.id,
-      })),
-      onFilter: (value, record) => record.group_id === value,
-    },
-    {
-      title: '使用次数',
-      dataIndex: 'use_count',
-      key: 'use_count',
-      render: (count) => (
-        <Badge count={count} style={{ backgroundColor: '#52c41a' }} />
-      ),
-      sorter: (a, b) => a.use_count - b.use_count,
-    },
-    {
-      title: '系统标签',
-      dataIndex: 'is_system',
-      key: 'is_system',
-      render: (isSystem) => (
-        <Switch checked={isSystem} disabled size="small" />
-      ),
-      filters: [
-        { text: '系统标签', value: true },
-        { text: '用户标签', value: false },
-      ],
-      onFilter: (value, record) => record.is_system === value,
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (time) => new Date(time).toLocaleString(),
-      sorter: (a, b) => new Date(a.created_at) - new Date(b.created_at),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_, record) => (
-        <Space size="middle">
-          <Button 
-            type="text" 
-            icon={<EditOutlined />} 
-            onClick={() => handleEditTag(record)}
-            disabled={record.is_system}
-          />
-          <Popconfirm
-            title="确定要删除这个标签吗？"
-            onConfirm={() => handleDeleteTag(record.id)}
-            okText="是"
-            cancelText="否"
-            disabled={record.is_system}
-          >
-            <Button 
-              type="text" 
-              danger 
-              icon={<DeleteOutlined />}
-              disabled={record.is_system}
-            />
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
-  const groupColumns = [
-    {
-      title: '分组名称',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text, record) => (
-        <Tag color={record.color} icon={<FolderOutlined />}>
-          {text}
-        </Tag>
-      ),
-    },
-    {
-      title: '描述',
-      dataIndex: 'description',
-      key: 'description',
-      ellipsis: true,
-    },
-    {
-      title: '排序',
-      dataIndex: 'sort_order',
-      key: 'sort_order',
-      sorter: (a, b) => a.sort_order - b.sort_order,
-    },
-    {
-      title: '系统分组',
-      dataIndex: 'is_system',
-      key: 'is_system',
-      render: (isSystem) => (
-        <Switch checked={isSystem} disabled size="small" />
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_, record) => (
-        <Space size="middle">
-          <Button 
-            type="text" 
-            icon={<EditOutlined />} 
-            onClick={() => handleEditGroup(record)}
-            disabled={record.is_system}
-          />
-          <Popconfirm
-            title="确定要删除这个分组吗？"
-            onConfirm={() => handleDeleteGroup(record.id)}
-            okText="是"
-            cancelText="否"
-            disabled={record.is_system}
-          >
-            <Button 
-              type="text" 
-              danger 
-              icon={<DeleteOutlined />}
-              disabled={record.is_system}
-            />
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+  const treeData = buildTreeData();
 
   return (
-    <div style={{ padding: 24 }}>
-      <Tabs activeKey={activeTab} onChange={setActiveTab}>
-        <TabPane tab={<span><TagOutlined />标签</span>} key="tags">
-          <Card>
-            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-              <Space>
-                <Search
-                  placeholder="搜索标签..."
-                  style={{ width: 300 }}
-                  onSearch={handleSearch}
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                />
-                <Select
-                  placeholder="选择分组"
-                  style={{ width: 200 }}
-                  value={selectedGroup}
-                  onChange={handleGroupFilter}
-                  allowClear
-                >
-                  {tagGroups.map(group => (
-                    <Select.Option key={group.id} value={group.id}>
-                      <Tag color={group.color} style={{ margin: 0 }}>
-                        {group.name}
-                      </Tag>
-                    </Select.Option>
-                  ))}
-                </Select>
-              </Space>
-              <Space>
-              
-                <Button 
-                  type="primary" 
-                  icon={<PlusOutlined />} 
-                  onClick={handleCreateTag}
-                >
-                  新建
-                </Button>
-            
-              </Space>
-            </div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* 顶部工具栏 */}
+      <div style={{ padding: '16px', borderBottom: '1px solid #f0f0f0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Search
+            placeholder="搜索标签..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            size="small"
+            allowClear
+            style={{ flex: 1 }}
+          />
+          <Button 
+            type="primary" 
+            size="small"
+            icon={<AppstoreAddOutlined />}
+            onClick={handleCreateGroup}
+            title="新建分组"
+          />
+          <Button
+            size="small"
+            icon={<BarChartOutlined />}
+            onClick={() => setStatisticsDrawerVisible(true)}
+            title="统计"
+          />
+        </div>
+      </div>
 
-            <Table
-              columns={tagColumns}
-              dataSource={tags}
-              rowKey="id"
-              loading={loading}
-              pagination={{
-                total: tags.length,
-                showSizeChanger: true,
-                showQuickJumper: true,
-                showTotal: (total, range) => `${range[0]}-${range[1]} 共 ${total} 条`,
-              }}
-              scroll={{ x: 1000 }}
-            />
-          </Card>
-        </TabPane>
-
-        <TabPane tab={<span><FolderOutlined />分组</span>} key="groups">
-          <Card>
-            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-              <div />
-              <Button 
-                type="primary" 
-                icon={<PlusOutlined />} 
-                onClick={handleCreateGroup}
-              >
-                新建
-              </Button>
-            </div>
-
-            <Table
-              columns={groupColumns}
-              dataSource={tagGroups}
-              rowKey="id"
-              loading={loading}
-              pagination={false}
-            />
-          </Card>
-        </TabPane>
-      </Tabs>
+      {/* 树形标签列表 */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+        <Tree
+          showLine
+          showIcon={false}
+          blockNode
+          treeData={treeData}
+          expandedKeys={expandedKeys}
+          selectedKeys={selectedKeys}
+          onExpand={(keys) => setExpandedKeys(keys)}
+          onSelect={(keys) => setSelectedKeys(keys)}
+          loading={loading}
+          style={{ fontSize: '12px' }}
+          height={400}
+        />
+      </div>
 
       {/* 标签编辑模态框 */}
       <Modal
@@ -537,11 +568,13 @@ const TagManagementPage = () => {
         open={tagModalVisible}
         onCancel={() => setTagModalVisible(false)}
         footer={null}
+        width={400}
       >
         <Form
           form={tagForm}
           layout="vertical"
           onFinish={handleTagSubmit}
+          size="small"
         >
           <Form.Item
             label="标签名称"
@@ -554,14 +587,25 @@ const TagManagementPage = () => {
             label="描述"
             name="description"
           >
-            <Input.TextArea placeholder="请输入描述（可选）" />
+            <Input.TextArea placeholder="请输入描述（可选）" rows={3} />
           </Form.Item>
           <Form.Item
             label="颜色"
             name="color"
             initialValue="#1890ff"
           >
-            <ColorPicker />
+            <ColorPicker 
+              showText 
+              format="hex"
+              size="small"
+              presets={[
+                { label: '蓝色', colors: ['#1890ff', '#096dd9', '#0050b3'] },
+                { label: '绿色', colors: ['#52c41a', '#389e0d', '#237804'] },
+                { label: '橙色', colors: ['#fa8c16', '#d46b08', '#ad4e00'] },
+                { label: '红色', colors: ['#f5222d', '#cf1322', '#a8071a'] },
+                { label: '紫色', colors: ['#722ed1', '#531dab', '#391085'] }
+              ]}
+            />
           </Form.Item>
           <Form.Item
             label="分组"
@@ -570,18 +614,20 @@ const TagManagementPage = () => {
             <Select placeholder="选择分组（可选）" allowClear>
               {tagGroups.map(group => (
                 <Select.Option key={group.id} value={group.id}>
-                  {group.name}
+                  <Tag color={group.color} style={{ margin: 0 }}>
+                    {group.name}
+                  </Tag>
                 </Select.Option>
               ))}
             </Select>
           </Form.Item>
-          <Form.Item>
+          <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
             <Space>
-              <Button type="primary" htmlType="submit">
-                {editingTag ? '更新' : '创建'}
-              </Button>
               <Button onClick={() => setTagModalVisible(false)}>
                 取消
+              </Button>
+              <Button type="primary" htmlType="submit">
+                {editingTag ? '更新' : '创建'}
               </Button>
             </Space>
           </Form.Item>
@@ -594,11 +640,13 @@ const TagManagementPage = () => {
         open={groupModalVisible}
         onCancel={() => setGroupModalVisible(false)}
         footer={null}
+        width={400}
       >
         <Form
           form={groupForm}
           layout="vertical"
           onFinish={handleGroupSubmit}
+          size="small"
         >
           <Form.Item
             label="分组名称"
@@ -611,14 +659,25 @@ const TagManagementPage = () => {
             label="描述"
             name="description"
           >
-            <Input.TextArea placeholder="请输入描述（可选）" />
+            <Input.TextArea placeholder="请输入描述（可选）" rows={3} />
           </Form.Item>
           <Form.Item
             label="颜色"
             name="color"
             initialValue="#1890ff"
           >
-            <ColorPicker />
+            <ColorPicker 
+              showText 
+              format="hex"
+              size="small"
+              presets={[
+                { label: '蓝色', colors: ['#1890ff', '#096dd9', '#0050b3'] },
+                { label: '绿色', colors: ['#52c41a', '#389e0d', '#237804'] },
+                { label: '橙色', colors: ['#fa8c16', '#d46b08', '#ad4e00'] },
+                { label: '红色', colors: ['#f5222d', '#cf1322', '#a8071a'] },
+                { label: '紫色', colors: ['#722ed1', '#531dab', '#391085'] }
+              ]}
+            />
           </Form.Item>
           <Form.Item
             label="排序"
@@ -627,13 +686,13 @@ const TagManagementPage = () => {
           >
             <Input type="number" placeholder="排序序号" />
           </Form.Item>
-          <Form.Item>
+          <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
             <Space>
-              <Button type="primary" htmlType="submit">
-                {editingGroup ? '更新' : '创建'}
-              </Button>
               <Button onClick={() => setGroupModalVisible(false)}>
                 取消
+              </Button>
+              <Button type="primary" htmlType="submit">
+                {editingGroup ? '更新' : '创建'}
               </Button>
             </Space>
           </Form.Item>
@@ -646,63 +705,40 @@ const TagManagementPage = () => {
         placement="right"
         onClose={() => setStatisticsDrawerVisible(false)}
         open={statisticsDrawerVisible}
-        width={600}
+        width={320}
       >
         {statistics && (
           <div>
-            <Row gutter={16} style={{ marginBottom: 24 }}>
-              <Col span={8}>
-                <Card>
-                  <Statistic
-                    title="总标签数"
-                    value={statistics.total_tags}
-                    prefix={<TagOutlined />}
-                  />
-                </Card>
-              </Col>
-              <Col span={8}>
-                <Card>
-                  <Statistic
-                    title="系统标签"
-                    value={statistics.system_tags}
-                    prefix={<SettingOutlined />}
-                  />
-                </Card>
-              </Col>
-              <Col span={8}>
-                <Card>
-                  <Statistic
-                    title="用户标签"
-                    value={statistics.user_tags}
-                    prefix={<BulbOutlined />}
-                  />
-                </Card>
-              </Col>
-            </Row>
-
-            <Divider />
-
-            <Title level={4}>
-              <FireOutlined /> 热门标签
-            </Title>
-            <div style={{ marginBottom: 24 }}>
-              {mostUsedTags.map(tag => (
-                <Tag key={tag.id} color={tag.color} style={{ marginBottom: 8 }}>
-                  {tag.name} ({tag.use_count})
-                </Tag>
-              ))}
-            </div>
-
-            <Title level={4}>
-              <ClockCircleOutlined /> 最近使用
-            </Title>
-            <div>
-              {recentTags.map(tag => (
-                <Tag key={tag.id} color={tag.color} style={{ marginBottom: 8 }}>
-                  {tag.name}
-                </Tag>
-              ))}
-            </div>
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Card size="small">
+                <Statistic
+                  title="总标签数"
+                  value={statistics.total_tags}
+                  prefix={<TagOutlined />}
+                />
+              </Card>
+              <Card size="small">
+                <Statistic
+                  title="系统标签"
+                  value={statistics.system_tags}
+                  prefix={<SettingOutlined />}
+                />
+              </Card>
+              <Card size="small">
+                <Statistic
+                  title="用户标签"
+                  value={statistics.user_tags}
+                  prefix={<BulbOutlined />}
+                />
+              </Card>
+              <Card size="small">
+                <Statistic
+                  title="标签分组"
+                  value={tagGroups.length}
+                  prefix={<FolderOutlined />}
+                />
+              </Card>
+            </Space>
           </div>
         )}
       </Drawer>
