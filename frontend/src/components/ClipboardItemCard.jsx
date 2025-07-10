@@ -18,6 +18,10 @@ import {
 
 
 
+
+
+
+
     Copy,
     Edit3,
     Heart,
@@ -179,7 +183,7 @@ const ClipboardItemCard = ({
     return (
         <TooltipProvider>
             <Card className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
+                <CardContent className="p-4 text-left">
                     {/* 标题和操作按钮区域 */}
                     <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center space-x-2">
@@ -321,14 +325,14 @@ const ClipboardItemCard = ({
                     {/* 内容区域 - 占据全宽 */}
                     <div className="mb-4">
                         <div
-                            className={`text-sm leading-relaxed break-words whitespace-pre-wrap ${shouldTruncate ? 'cursor-pointer hover:bg-muted p-2 -mx-2 rounded' : ''
+                            className={`text-sm leading-relaxed break-words whitespace-pre-wrap text-left ${shouldTruncate ? 'cursor-pointer hover:bg-muted p-2 -mx-2 rounded' : ''
                                 }`}
                             onClick={handleContentClick}
                         >
                             {displayContent}
                         </div>
                         {shouldTruncate && (
-                            <p className="text-xs text-muted-foreground italic mt-1">
+                            <p className="text-xs text-muted-foreground italic mt-1 text-left">
                                 点击查看完整内容
                             </p>
                         )}
@@ -383,13 +387,13 @@ const ClipboardItemCard = ({
                     
                     <div className="flex-1 px-6 py-4 min-h-0">
                         <div 
-                            className="w-full h-full overflow-y-scroll bg-slate-50 border rounded-lg p-4"
+                            className="w-full h-full overflow-y-scroll bg-slate-50 border rounded-lg p-4 text-left"
                             style={{
                                 scrollbarWidth: 'thin',
                                 scrollbarColor: '#94a3b8 #e2e8f0'
                             }}
                         >
-                            <div className="text-sm leading-relaxed whitespace-pre-wrap break-words font-mono">
+                            <div className="text-sm leading-relaxed whitespace-pre-wrap break-words font-mono text-left">
                                 {itemContent}
                             </div>
                         </div>
@@ -436,7 +440,7 @@ const ClipboardItemCard = ({
                                 onChange={(e) => setEditContent(e.target.value)}
                                 placeholder="请输入内容..."
                                 rows={8}
-                                className="resize-none font-mono text-sm leading-relaxed"
+                                className="resize-none font-mono text-sm leading-relaxed text-left"
                             />
                         </div>
 

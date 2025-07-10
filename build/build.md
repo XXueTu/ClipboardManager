@@ -1,6 +1,8 @@
 # 安装 create-dmg 工具
 brew install create-dmg
 
+hdiutil create -volname "Sid" -srcfolder "Sid.app" -ov -format UDZO "Sid.dmg"
+
 # 创建 DMG 文件
 create-dmg \
   --volname "Sid" \
