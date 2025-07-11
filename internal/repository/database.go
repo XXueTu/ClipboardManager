@@ -17,9 +17,21 @@ type Database struct {
 
 // NewDatabase 创建新的数据库连接
 func NewDatabase(dbPath string) (*Database, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+	// 添加 SQLite 参数确保UTF-8编码支持
+	dsn := fmt.Sprintf("%s?_busy_timeout=10000&_case_sensitive_like=OFF&_encoding=UTF-8&_foreign_keys=ON&_journal_mode=WAL&_synchronous=NORMAL", dbPath)
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, err
+	}
+
+	// 设置连接池参数
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
+	// 执行 PRAGMA 设置确保 UTF-8 编码
+	if _, err := db.Exec("PRAGMA encoding = 'UTF-8'"); err != nil {
+		return nil, fmt.Errorf("failed to set UTF-8 encoding: %v", err)
 	}
 
 	database := &Database{DB: db}

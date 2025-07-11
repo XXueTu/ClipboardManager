@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"log"
+	"strings"
+	"unicode/utf8"
 
-	clipboardPkg "github.com/atotto/clipboard"
+	clipboardLib "golang.design/x/clipboard"
 
 	"Sid/internal/clipboard"
 	"Sid/internal/models"
@@ -79,6 +81,17 @@ func NewClipboardService(repo repository.ClipboardRepository, settings *models.S
 
 // ProcessContent 实现ContentProcessor接口，处理剪切板内容
 func (s *clipboardService) ProcessContent(content string) error {
+	// 确保内容是有效的UTF-8字符串，如果不是则尝试修复
+	if !isValidUTF8(content) {
+		log.Println("⚠️  检测到非UTF-8内容，尝试修复...")
+		content = fixUTF8String(content)
+		if content == "" {
+			log.Println("❌ 无法修复UTF-8内容，跳过")
+			return nil
+		}
+		log.Println("✅ UTF-8内容修复成功")
+	}
+
 	// 检查是否重复内容
 	isDuplicate, err := s.repo.IsDuplicateContent(content)
 	if err != nil {
@@ -137,7 +150,7 @@ func (s *clipboardService) UseItem(id string) error {
 	}
 
 	// 复制到剪切板
-	clipboardPkg.WriteAll(item.Content)
+	clipboardLib.Write(clipboardLib.FmtText, []byte(item.Content))
 
 	// 更新使用次数和最后使用时间
 	return s.repo.UseItem(id)
@@ -284,4 +297,48 @@ func (s *clipboardService) GetCategoriesAndTags() (models.CategoryTagsResponse, 
 		Categories: categories,
 		Tags:       tags,
 	}, nil
+}
+
+// isValidUTF8 检查字符串是否为有效的UTF-8编码
+func isValidUTF8(s string) bool {
+	return utf8.ValidString(s)
+}
+
+// fixUTF8String 尝试修复非UTF-8字符串
+func fixUTF8String(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+
+	// 方法1: 使用 strings.ToValidUTF8 替换无效字符
+	fixed := strings.ToValidUTF8(s, "�")
+	if fixed != "" && !strings.Contains(fixed, "�") {
+		return fixed
+	}
+
+	// 方法2: 逐字符检查并重建字符串
+	var builder strings.Builder
+	for _, r := range s {
+		if r != utf8.RuneError {
+			_, _ = builder.WriteRune(r) // 忽略错误，因为 WriteRune 在这种情况下不会失败
+		}
+	}
+	
+	result := builder.String()
+	if result != "" {
+		return result
+	}
+
+	// 方法3: 如果前面的方法都失败，尝试从字节层面修复
+	bytes := []byte(s)
+	var validBytes []byte
+	for len(bytes) > 0 {
+		r, size := utf8.DecodeRune(bytes)
+		if r != utf8.RuneError || size != 1 {
+			validBytes = append(validBytes, bytes[:size]...)
+		}
+		bytes = bytes[size:]
+	}
+	
+	return string(validBytes)
 }

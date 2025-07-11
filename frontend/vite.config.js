@@ -34,7 +34,19 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false,
-    minify: 'esbuild', // 使用esbuild代替terser
+    minify: 'terser', // 使用terser确保中文字符正确处理
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      },
+      format: {
+        comments: false,
+        // 确保Unicode字符正确处理
+        ascii_only: false,
+        ecma: 2020,
+      },
+    },
   },
   // 为Wails环境优化
   define: {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atotto/clipboard"
+	clipboardLib "golang.design/x/clipboard"
 	"github.com/google/uuid"
 	"github.com/jbrukh/bayesian"
 
@@ -101,7 +101,8 @@ func (m *monitor) monitorLoop() {
 		case <-m.stopChan:
 			return
 		case <-ticker.C:
-			if content, err := clipboard.ReadAll(); err == nil {
+			if data := clipboardLib.Read(clipboardLib.FmtText); len(data) > 0 {
+				content := string(data)
 				if content != "" && content != m.lastClipboard {
 					m.lastClipboard = content
 					m.processClipboardContent(content)

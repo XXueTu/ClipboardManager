@@ -1,6 +1,8 @@
 module Sid
 
-go 1.23.0
+go 1.24
+
+toolchain go1.24.5
 
 require (
 	github.com/robotn/gohook v0.31.3
@@ -8,12 +10,12 @@ require (
 )
 
 require (
-	github.com/atotto/clipboard v0.1.4
 	github.com/cloudwego/eino v0.3.51
 	github.com/cloudwego/eino-ext/components/model/openai v0.0.0-20250707040601-2fab92740585
 	github.com/google/uuid v1.6.0
 	github.com/jbrukh/bayesian v0.0.0-20231117143245-13ae6f916c7a
 	github.com/mattn/go-sqlite3 v1.14.17
+	golang.design/x/clipboard v0.7.1
 )
 
 require (
@@ -68,6 +70,9 @@ require (
 	golang.org/x/arch v0.11.0 // indirect
 	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
+	golang.org/x/exp/shiny v0.0.0-20250606033433-dcc06ee1d476 // indirect
+	golang.org/x/image v0.28.0 // indirect
+	golang.org/x/mobile v0.0.0-20250606033058-a2a15c67f36f // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.26.0 // indirect

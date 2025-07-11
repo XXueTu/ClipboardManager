@@ -8,6 +8,8 @@ import (
 	"Sid/internal/window"
 	"context"
 	"log"
+	
+	clipboardLib "golang.design/x/clipboard"
 )
 
 // App 应用程序主结构体
@@ -61,6 +63,13 @@ func NewApp() *App {
 // startup 应用程序启动时调用
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// 初始化剪切板库
+	err := clipboardLib.Init()
+	if err != nil {
+		log.Printf("初始化剪切板库失败: %v", err)
+		return
+	}
 
 	// 初始化应用程序服务
 	if err := a.appService.Initialize(ctx); err != nil {

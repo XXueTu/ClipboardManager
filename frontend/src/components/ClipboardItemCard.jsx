@@ -1,27 +1,5 @@
 import {
-    Bot // Added Bot icon
-    ,
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    Bot,
     Copy,
     Edit3,
     Heart,
