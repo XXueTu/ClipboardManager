@@ -659,7 +659,7 @@ const ChatPage = () => {
                 {currentSession ? (
                     <>
                         {/* 消息列表 */}
-                        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent p-3">
+                        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent p-3 min-h-0">
                             {messages.length === 0 ? (
                                 <div className="h-full flex items-center justify-center">
                                     <div className="text-center max-w-md">
@@ -673,7 +673,7 @@ const ChatPage = () => {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="space-y-4">
+                                <div className="space-y-4 pb-4">
                                     {messages.map(message => (
                                         <div
                                             key={message.id}
@@ -734,7 +734,7 @@ const ChatPage = () => {
                         </div>
                     </>
                 ) : (
-                    <div className="h-full flex items-center justify-center">
+                    <div className="flex-1 flex items-center justify-center min-h-0">
                         <div className="text-center max-w-md">
                             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500/10 to-purple-600/10 flex items-center justify-center mx-auto mb-6">
                                 <MessageCircle className="w-10 h-10 text-blue-500" />
@@ -752,7 +752,7 @@ const ChatPage = () => {
                     </div>
                 )}
 
-                {/* 输入区域 - 始终显示 */}
+                {/* 输入区域 - 固定在底部 */}
                 <div className="flex-shrink-0 p-3 border-t border-border bg-background/95 backdrop-blur-sm">
                     <div className="flex gap-2">
                         <div className="flex-1 relative">
@@ -762,7 +762,7 @@ const ChatPage = () => {
                                 onKeyPress={handleKeyPress}
                                 placeholder={currentSession ? "输入您的问题..." : "输入问题开始新对话..."}
                                 disabled={isLoading}
-                                className="pr-12 text-sm"
+                                className="pr-12 text-sm h-10"
                             />
                             <Button
                                 onClick={sendMessage}

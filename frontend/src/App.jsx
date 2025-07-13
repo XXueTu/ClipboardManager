@@ -33,7 +33,7 @@ import { ChatPage, FavoritesPage, SettingsPage, StatisticsPage, TrashPage } from
 import TagManagementPage from './pages/TagManagementPage';
 
 // 导入 Hooks
-import { useClipboardData, useKeyboardShortcuts, useWindowState, useCategoriesAndTags } from './hooks';
+import { useCategoriesAndTags, useClipboardData, useKeyboardShortcuts, useWindowState } from './hooks';
 
 // 导入常量
 import { SEARCH_ANIMATION_STYLE } from './constants';
@@ -70,7 +70,7 @@ function AppContent() {
         loadInitialData
     } = useClipboardData();
     
-    const { windowState } = useWindowState();
+    const { windowState, windowSize } = useWindowState();
     useKeyboardShortcuts();
     
     // 获取动态分类和标签
@@ -381,6 +381,7 @@ function AppContent() {
                 onClearSearch={handleClearSearch}
                 searchForm={globalSearchForm}
                 onSearchFormChange={handleSearchFormChange}
+                onRefresh={loadClipboardItems}
             />
             
             {loading ? (
@@ -424,11 +425,30 @@ function AppContent() {
         </div>
     );
 
+    // 计算合适的应用高度
+    const getAppHeight = () => {
+        // 使用真实窗口高度，减去padding和边距
+        const actualHeight = windowSize.h;
+        const padding = 32; // 上下padding总计 (p-4 = 16px * 2)
+        const availableHeight = actualHeight - padding;
+        
+        // 确保最小高度
+        const minHeight = 400;
+        return Math.max(availableHeight, minHeight);
+    };
+
+    const appHeight = getAppHeight();
+
     return (
-        <div className="min-h-screen bg-gray-50/50 p-4">
+        <div className="p-4" style={{ height: `${windowSize.h}px` }}>
             <div className="max-w-7xl mx-auto">
-                <div className="bg-background rounded-2xl border border-border/50 shadow-lg shadow-gray-900/5 h-[calc(100vh-2rem)]">
+                <div 
+                    className="bg-background/95 backdrop-blur-sm rounded-2xl border border-border/30 shadow-lg shadow-black/10"
+                    style={{ height: `${appHeight}px` }}
+                >
                     <div className="p-6 h-full">
+                      
+                        
                         {/* 监听状态指示器 */}
                         {/* {windowState.isMonitoring && (
                             <div style={MONITORING_STATUS_STYLE}>
@@ -499,7 +519,7 @@ function AppContent() {
 
                                 <TabsContent value="chat" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
                                     <ErrorBoundary>
-                                        <div className="flex-1 overflow-y-auto">
+                                        <div className="h-full flex flex-col">
                                             <ChatPage />
                                         </div>
                                     </ErrorBoundary>

@@ -47,8 +47,8 @@ func main() {
 	// Create application with options
 	err := wails.Run(&options.App{
 		Title:            "Clipboard Manager",
-		Width:            500,  // 更宽的界面
-		Height:           1080, // 全屏高度
+		Width:            500, // 更宽的界面
+		Height:           900, // 进一步增加高度让窗口更长
 		AssetServer:      assetServerOptions,
 		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0}, // 完全透明背景
 		OnStartup:        app.startup,
@@ -64,9 +64,9 @@ func main() {
 
 		// 窗口尺寸约束
 		MinWidth:  400,
-		MinHeight: 600,
+		MinHeight: 750, // 进一步增加最小高度
 		MaxWidth:  800,
-		MaxHeight: 1200,
+		MaxHeight: 1100, // 进一步增加最大高度让窗口更长
 
 		// 单实例锁定 - 确保只有一个实例运行
 		SingleInstanceLock: &options.SingleInstanceLock{

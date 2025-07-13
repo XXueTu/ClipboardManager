@@ -43,8 +43,8 @@ func NewManager() Manager {
 	return &manager{
 		screenWidth:  1920,
 		screenHeight: 1080,
-		windowWidth:  500,  // 默认宽度
-		windowHeight: 1080, // 默认高度
+		windowWidth:  500, // 默认宽度
+		windowHeight: 900, // 进一步增加默认高度让窗口更长
 	}
 }
 
@@ -87,8 +87,8 @@ func (m *manager) SetScreenSize(width, height int) {
 	m.screenHeight = height
 
 	// 根据屏幕尺寸调整窗口大小
-	m.windowHeight = min(height, 1080)
-	m.windowWidth = min(500, width/4) // 最大不超过屏幕宽度的1/4
+	m.windowHeight = min(height, 1100) // 进一步增加最大高度限制让窗口更长
+	m.windowWidth = min(500, width/4)  // 最大不超过屏幕宽度的1/4
 
 	if m.ctx != nil {
 		runtime.WindowSetSize(m.ctx, m.windowWidth, m.windowHeight)
@@ -113,13 +113,18 @@ func (m *manager) initializeSidebar() {
 		hiddenX = m.screenWidth
 	}
 
-	// 计算垂直居中位置
+	// 计算垂直位置 - 稍微往上偏移
 	centerY := (m.screenHeight - m.windowHeight) / 2
 	if centerY < 0 {
 		centerY = 0
 	}
+	// 往上偏移120px，让窗口更靠上
+	offsetY := centerY - 120
+	if offsetY < 0 {
+		offsetY = 0
+	}
 
-	runtime.WindowSetPosition(m.ctx, hiddenX, centerY)
+	runtime.WindowSetPosition(m.ctx, hiddenX, offsetY)
 	runtime.WindowSetSize(m.ctx, m.windowWidth, m.windowHeight)
 	runtime.WindowShow(m.ctx)
 }
@@ -177,6 +182,11 @@ func (m *manager) ShowWindow() {
 		if centerY < 0 {
 			centerY = 0
 		}
+		// 往上偏移120px，让窗口更靠上
+		offsetY := centerY - 120
+		if offsetY < 0 {
+			offsetY = 0
+		}
 
 		if m.settings.Position == "left" {
 			startX = -m.windowWidth
@@ -186,7 +196,7 @@ func (m *manager) ShowWindow() {
 			endX = m.screenWidth - m.windowWidth
 		}
 
-		m.animateWindow(startX, endX, centerY)
+		m.animateWindow(startX, endX, offsetY)
 		m.isVisible = true
 	}()
 }
@@ -206,6 +216,11 @@ func (m *manager) HideWindow() {
 		if centerY < 0 {
 			centerY = 0
 		}
+		// 往上偏移120px，让窗口更靠上
+		offsetY := centerY - 120
+		if offsetY < 0 {
+			offsetY = 0
+		}
 
 		if m.settings.Position == "left" {
 			startX = 0
@@ -215,7 +230,7 @@ func (m *manager) HideWindow() {
 			endX = m.screenWidth
 		}
 
-		m.animateWindow(startX, endX, centerY)
+		m.animateWindow(startX, endX, offsetY)
 		m.isVisible = false
 	}()
 }

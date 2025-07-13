@@ -1,5 +1,6 @@
 import {
     Plus,
+    RefreshCw,
     Search, X
 } from 'lucide-react';
 import { useState } from 'react';
@@ -25,8 +26,9 @@ import { useCategoriesAndTags } from '../hooks';
  * @param {Function} props.onAddItem - 添加条目回调函数
  * @param {Object} props.searchResult - 搜索结果（用于统计展示）
  * @param {Function} props.onClearSearch - 清除搜索回调
+ * @param {Function} props.onRefresh - 刷新列表回调
  */
-const SearchBar = ({ onSearch, categories, contentTypes, onAddItem, searchResult, onClearSearch, searchForm, onSearchFormChange }) => {
+const SearchBar = ({ onSearch, categories, contentTypes, onAddItem, searchResult, onClearSearch, searchForm, onSearchFormChange, onRefresh }) => {
     const { toast } = useToast();
     
     // 获取动态分类和标签
@@ -138,6 +140,17 @@ const SearchBar = ({ onSearch, categories, contentTypes, onAddItem, searchResult
                         className="h-9 px-3 rounded-lg"
                     >
                         <Plus className="h-4 w-4" />
+                    </Button>
+
+                    {/* 刷新按钮 */}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onRefresh}
+                        className="h-9 px-3 rounded-lg"
+                        title="刷新列表"
+                    >
+                        <RefreshCw className="h-4 w-4" />
                     </Button>
                 </div>
             </div>

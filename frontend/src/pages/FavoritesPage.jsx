@@ -152,6 +152,7 @@ const FavoritesPage = ({ favoriteItems, onCopy, onToggleFavorite, onDelete, onEd
                 onClearSearch={handleClearSearch}
                 searchForm={globalSearchForm}
                 onSearchFormChange={onSearchFormChange}
+                onRefresh={onRefresh}
             />
             
             
