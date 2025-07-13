@@ -84,6 +84,8 @@ export function SearchTags(arg1:models.TagSearchQuery):Promise<Array<models.TagW
 
 export function SendChatMessage(arg1:string,arg2:string):Promise<models.ChatMessage>;
 
+export function SendChatMessageStream(arg1:string,arg2:string):Promise<void>;
+
 export function SetScreenSize(arg1:number,arg2:number):Promise<void>;
 
 export function ShowWindow():Promise<void>;

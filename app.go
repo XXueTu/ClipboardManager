@@ -8,7 +8,7 @@ import (
 	"Sid/internal/window"
 	"context"
 	"log"
-	
+
 	clipboardLib "golang.design/x/clipboard"
 )
 
@@ -369,4 +369,29 @@ func (a *App) MergeTags(sourceTagName, targetTagName string) error {
 // GetSimilarTags 获取相似标签
 func (a *App) GetSimilarTags(tagName string, limit int) ([]models.Tag, error) {
 	return a.tagService.GetSimilarTags(tagName, limit)
+}
+
+// SendChatMessageStream 发送流式聊天消息（Wails 原生版本）
+func (a *App) SendChatMessageStream(sessionID, message string) error {
+	log.Printf("🔄 开始流式聊天处理: sessionID=%s, message=%s", sessionID, message)
+	
+	// 导入 runtime 包需要在文件开头添加
+	// "github.com/wailsapp/wails/v2/pkg/runtime"
+	
+	// 使用 chatService 的流式方法
+	err := a.chatService.SendMessageStream(a.ctx, sessionID, message, func(response *models.StreamResponse) {
+		// 临时注释掉 runtime 调用，稍后修复
+		log.Printf("📤 发送事件: type=%s", response.Type)
+		
+		// TODO: 添加 runtime.EventsEmit 调用
+		// runtime.EventsEmit(a.ctx, "chat:stream:message", ...)
+	})
+	
+	if err != nil {
+		log.Printf("❌ 流式聊天处理失败: %v", err)
+		return err
+	}
+	
+	log.Printf("✅ 流式聊天处理完成")
+	return nil
 }

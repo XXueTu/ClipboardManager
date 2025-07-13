@@ -10,11 +10,8 @@ export default defineConfig({
     strictPort: true,
     cors: true,
     origin: 'http://localhost:5173',
-    // 在开发模式下禁用HMR，避免与Wails冲突
-    hmr: {
-      port: 5174,
-      overlay: false,
-    },
+    // 在开发模式下禁用HMR，避免与Wails冲突和ATS问题
+    hmr: false, // 完全禁用HMR避免localhost:5174连接问题
     // 添加代理配置，避免404错误
     proxy: {
       '/api': {

@@ -195,16 +195,17 @@ func (s *appService) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 创建flusher
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		s.writeSSEError(w, "Streaming not supported")
-		return
+	// 创建flusher（如果不支持flushing也继续处理）
+	flusher, flushSupported := w.(http.Flusher)
+	if !flushSupported {
+		log.Printf("⚠️ HTTP Flushing不支持，但继续处理流式响应")
 	}
 
 	// 发送开始事件
 	s.writeSSEEvent(w, "start", fmt.Sprintf(`{"session_id": "%s", "message": "%s"}`, sessionID, message))
-	flusher.Flush()
+	if flushSupported {
+		flusher.Flush()
+	}
 
 	// 使用回调函数处理流式响应
 	err := s.chatService.SendMessageStream(r.Context(), sessionID, message, func(response *models.StreamResponse) {
@@ -225,17 +226,23 @@ func (s *appService) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			log.Printf("📤 发送SSE error事件: error='%s'", response.Error)
 			s.writeSSEEvent(w, "error", response.Error)
 		}
-		flusher.Flush()
+		if flushSupported {
+			flusher.Flush()
+		}
 	})
 
 	if err != nil {
 		s.writeSSEError(w, fmt.Sprintf("Stream error: %v", err))
-		flusher.Flush()
+		if flushSupported {
+			flusher.Flush()
+		}
 	}
 
 	// 发送结束事件
 	s.writeSSEEvent(w, "end", fmt.Sprintf(`{"session_id": "%s"}`, sessionID))
-	flusher.Flush()
+	if flushSupported {
+		flusher.Flush()
+	}
 }
 
 // writeSSEEvent 写入SSE事件

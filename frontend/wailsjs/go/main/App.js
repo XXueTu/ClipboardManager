@@ -166,6 +166,10 @@ export function SendChatMessage(arg1, arg2) {
   return window['go']['main']['App']['SendChatMessage'](arg1, arg2);
 }
 
+export function SendChatMessageStream(arg1, arg2) {
+  return window['go']['main']['App']['SendChatMessageStream'](arg1, arg2);
+}
+
 export function SetScreenSize(arg1, arg2) {
   return window['go']['main']['App']['SetScreenSize'](arg1, arg2);
 }

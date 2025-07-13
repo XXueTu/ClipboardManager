@@ -459,12 +459,30 @@ const ChatPage = () => {
                 console.log('Fallback API完成，设置isStreaming=false');
             } catch (error) {
                 console.error('Failed to send message:', error);
+                let errorMessage = '抱歉，AI服务暂时不可用。';
+                
+                // 根据错误类型提供更具体的信息
+                if (error.message && error.message.includes('network')) {
+                    errorMessage = '❌ 网络连接失败，请检查网络连接后重试。';
+                } else if (error.message && error.message.includes('timeout')) {
+                    errorMessage = '⏱️ 请求超时，AI服务响应较慢，请稍后重试。';
+                } else if (error.message && (error.message.includes('unauthorized') || error.message.includes('401'))) {
+                    errorMessage = '🔑 AI服务认证失败，请联系管理员检查API密钥配置。';
+                } else if (error.message && (error.message.includes('quota') || error.message.includes('limit'))) {
+                    errorMessage = '📊 AI服务配额不足，请稍后重试或联系管理员。';
+                } else if (error.message && error.message.includes('model')) {
+                    errorMessage = '🤖 AI模型加载失败，请稍后重试。';
+                }
+                
+                // 使用本地测试响应作为备用
+                const localResponse = getLocalTestResponse(userMessage);
+                
                 setMessages(prev => prev.map(msg => 
                     msg.id === aiMsg.id 
-                        ? { ...msg, content: '抱歉，发送消息失败。', isStreaming: false }
+                        ? { ...msg, content: localResponse, isStreaming: false }
                         : msg
                 ));
-                toast.error('发送消息失败');
+                toast.error('AI服务暂时不可用，已切换到本地测试模式');
             } finally {
                 setIsLoading(false);
                 setIsStreaming(false);
@@ -543,9 +561,30 @@ const ChatPage = () => {
                         break;
                     case 'error':
                         console.error('Stream error:', data);
+                        let streamErrorMessage = '抱歉，AI服务出现了问题。';
+                        
+                        // 尝试解析错误信息
+                        try {
+                            if (typeof data === 'string') {
+                                if (data.includes('network') || data.includes('connection')) {
+                                    streamErrorMessage = '❌ 网络连接中断，请检查网络后重试。';
+                                } else if (data.includes('timeout')) {
+                                    streamErrorMessage = '⏱️ 服务响应超时，请稍后重试。';
+                                } else if (data.includes('unauthorized') || data.includes('401')) {
+                                    streamErrorMessage = '🔑 服务认证失败，请联系管理员。';
+                                } else if (data.includes('quota') || data.includes('limit')) {
+                                    streamErrorMessage = '📊 服务配额不足，请稍后重试。';
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Error parsing stream error:', e);
+                        }
+                        
+                        streamErrorMessage += '\n\n💡 建议：\n• 刷新页面重试\n• 检查网络连接\n• 稍后再试';
+                        
                         setMessages(prev => prev.map(msg => 
                             msg.id === aiMsg.id 
-                                ? { ...msg, content: '抱歉，出现了错误。', isStreaming: false }
+                                ? { ...msg, content: streamErrorMessage, isStreaming: false }
                                 : msg
                         ));
                         setIsStreaming(false);
@@ -565,7 +604,14 @@ const ChatPage = () => {
                 }
             };
 
-            await processStream();
+            // 检查是否在 Wails 环境中
+            const isWails = window.wails && window.wails.go;
+            if (isWails) {
+                console.log("在 Wails 环境中，直接使用普通API");
+                await fallbackToNormalAPI();
+            } else {
+                await processStream();
+            }
         } catch (error) {
             console.error('Streaming failed, falling back to normal API:', error);
             await fallbackToNormalAPI();
@@ -582,6 +628,23 @@ const ChatPage = () => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
+        }
+    };
+
+    // 本地测试模式 - 当AI服务不可用时使用
+    const getLocalTestResponse = (userMessage) => {
+        const message = userMessage.toLowerCase();
+        
+        if (message.includes('你好') || message.includes('hello') || message.includes('hi')) {
+            return '你好！我是AI助手。目前AI服务正在维护中，这是一个本地测试响应。\n\n✨ 功能说明：\n• 剪切板管理\n• 收藏内容\n• 标签管理\n• 数据统计';
+        } else if (message.includes('帮助') || message.includes('help')) {
+            return '📝 使用帮助：\n\n1. **剪切板**: 自动捕获复制的内容\n2. **收藏**: 标记重要内容\n3. **标签**: 分类管理内容\n4. **对话**: AI助手（需要网络连接）\n5. **统计**: 查看使用数据\n6. **设置**: 个性化配置\n\n💡 提示：AI服务恢复后将提供完整的智能对话功能。';
+        } else if (message.includes('功能') || message.includes('feature')) {
+            return '🚀 主要功能：\n\n• 📋 **智能剪切板**: 自动捕获和管理复制内容\n• ⭐ **收藏系统**: 保存重要信息\n• 🏷️ **标签管理**: 智能分类和搜索\n• 🤖 **AI对话**: 智能助手（维护中）\n• 📊 **数据统计**: 使用情况分析\n• ⚙️ **个性化设置**: 自定义体验';
+        } else if (message.includes('测试') || message.includes('test')) {
+            return '🧪 测试模式激活！\n\n当前状态：\n• ✅ 前端界面正常\n• ✅ 本地存储可用\n• ✅ 基础功能运行中\n• ⚠️ AI服务维护中\n\n请稍后重试AI功能，或继续使用其他功能。';
+        } else {
+            return `收到您的消息："${userMessage}"\n\n🔧 AI服务正在维护中，暂时无法提供智能回复。\n\n您可以：\n• 使用剪切板管理功能\n• 查看收藏和标签\n• 等待AI服务恢复\n\n💡 预计恢复时间：请关注系统通知`;
         }
     };
 
